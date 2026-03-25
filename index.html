@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales Dashboard — Go High Level</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e4e4e7;
+    --muted: #71717a;
+    --accent: #6366f1;
+    --accent2: #8b5cf6;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --cyan: #06b6d4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Setup Screen */
+  .setup-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+  .setup-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 48px; max-width: 480px; width: 100%; }
+  .setup-card h1 { font-size: 24px; margin-bottom: 8px; }
+  .setup-card p { color: var(--muted); margin-bottom: 32px; font-size: 14px; }
+  .setup-card label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .setup-card input { width: 100%; padding: 12px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; margin-bottom: 20px; outline: none; transition: border-color 0.2s; }
+  .setup-card input:focus { border-color: var(--accent); }
+  .btn-primary { width: 100%; padding: 14px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .error-msg { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: var(--red); padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 20px; display: none; }
+
+  /* Dashboard */
+  .dashboard { display: none; }
+  .topbar { padding: 16px 32px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--card); }
+  .topbar h1 { font-size: 18px; font-weight: 700; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .badge { font-size: 11px; padding: 4px 10px; border-radius: 999px; background: rgba(99,102,241,0.15); color: var(--accent); font-weight: 600; }
+  .btn-sm { padding: 8px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; cursor: pointer; transition: all 0.2s; }
+  .btn-sm:hover { border-color: var(--accent); }
+  .date-preset.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .main { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+
+  /* KPI Row */
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; }
+  .kpi-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 8px; }
+  .kpi-value { font-size: 28px; font-weight: 700; }
+  .kpi-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* Charts Grid */
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+  .chart-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+  .chart-card.full { grid-column: 1 / -1; }
+
+  /* Pipeline Funnel */
+  .funnel { margin-bottom: 24px; }
+  .funnel h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; background: var(--card); border: 1px solid var(--border); border-radius: 12px 12px 0 0; padding: 20px 24px; margin-bottom: 0; }
+  .funnel-stages { background: var(--card); border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; padding: 24px; }
+  .funnel-bar { display: flex; align-items: center; margin-bottom: 12px; gap: 16px; }
+  .funnel-bar:last-child { margin-bottom: 0; }
+  .funnel-label { width: 160px; font-size: 13px; font-weight: 500; text-align: right; flex-shrink: 0; }
+  .funnel-track { flex: 1; height: 36px; background: var(--bg); border-radius: 6px; position: relative; overflow: hidden; }
+  .funnel-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 12px; font-size: 12px; font-weight: 600; min-width: 40px; transition: width 0.6s ease; }
+  .funnel-stats { width: 180px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .funnel-stats strong { color: var(--text); }
+  .funnel-bar { position: relative; cursor: pointer; }
+  .funnel-tooltip { display: none; position: absolute; left: 180px; top: 100%; z-index: 50; background: #1e2030; border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 320px; max-width: 420px; max-height: 300px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.4); font-size: 12px; }
+  .funnel-bar:hover .funnel-tooltip { display: block; }
+  .funnel-tooltip h4 { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--accent); }
+  .funnel-tooltip table { width: 100%; }
+  .funnel-tooltip th { padding: 4px 8px; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); text-align: left; }
+  .funnel-tooltip td { padding: 6px 8px; font-size: 12px; border-bottom: 1px solid rgba(42,45,58,0.5); }
+  .funnel-tooltip tr:last-child td { border-bottom: none; }
+  .time-in-stage { color: var(--amber); font-weight: 500; }
+
+  /* Table */
+  .table-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 24px; }
+  .table-card h3 { font-size: 14px; font-weight: 600; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 10px 24px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  td { padding: 12px 24px; font-size: 13px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  .status-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .status-open { background: rgba(59,130,246,0.15); color: var(--blue); }
+  .status-won { background: rgba(34,197,94,0.15); color: var(--green); }
+  .status-lost { background: rgba(239,68,68,0.15); color: var(--red); }
+  .status-abandoned { background: rgba(113,113,122,0.15); color: var(--muted); }
+
+  /* Loading */
+  .loading-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
+  .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { color: var(--muted); font-size: 14px; }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .charts-grid { grid-template-columns: 1fr; }
+    .main { padding: 16px; }
+    .topbar { padding: 12px 16px; }
+    .funnel-label { width: 100px; font-size: 12px; }
+    .funnel-stats { width: 120px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div class="setup-screen" id="loginScreen">
+  <div class="setup-card">
+    <h1>Sales Dashboard</h1>
+    <p>Enter your invite code to access the dashboard. Don't have one? Ask your admin.</p>
+    <div class="error-msg" id="loginError"></div>
+    <label>Invite Code</label>
+    <input type="text" id="inviteCodeInput" placeholder="A3F1B2" style="text-transform:uppercase; letter-spacing:2px; font-size:18px; text-align:center;">
+    <button class="btn-primary" onclick="loginWithCode()">Access Dashboard</button>
+    <div style="margin-top:20px; text-align:center;">
+      <a href="#" onclick="showAdminLogin(); return false;" style="color:var(--muted); font-size:12px; text-decoration:none;">Admin login</a>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Login Screen -->
+<div class="setup-screen" id="adminLoginScreen" style="display:none">
+  <div class="setup-card">
+    <h1>Admin Login</h1>
+    <p>Enter the admin secret shown in your server terminal.</p>
+    <div class="error-msg" id="adminLoginError"></div>
+    <label>Admin Secret</label>
+    <input type="password" id="adminSecretInput" placeholder="your-admin-secret">
+    <button class="btn-primary" onclick="loginAsAdmin()">Login as Admin</button>
+    <div style="margin-top:20px; text-align:center;">
+      <a href="#" onclick="showUserLogin(); return false;" style="color:var(--muted); font-size:12px; text-decoration:none;">Back to invite code login</a>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Panel -->
+<div class="dashboard" id="adminPanel" style="display:none">
+  <div class="topbar">
+    <div><h1>Admin — Invite Management</h1></div>
+    <div class="topbar-right">
+      <button class="btn-sm" onclick="showDashboardFromAdmin()">View Dashboard</button>
+      <button class="btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </div>
+  <div class="main">
+    <div style="display:flex; gap:16px; margin-bottom:24px; align-items:flex-end;">
+      <div style="flex:1;">
+        <label style="font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:6px;">Label (optional)</label>
+        <input type="text" id="inviteLabelInput" placeholder="e.g. Sarah - Sales Team" style="width:100%; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px;">
+      </div>
+      <button class="btn-primary" style="width:auto; padding:10px 24px;" onclick="createInvite()">Generate Invite Code</button>
+    </div>
+    <div class="table-card">
+      <h3>Invite Codes</h3>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Label</th>
+              <th>Created</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="invitesBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loadingOverlay" style="display:none">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">Connecting to Go High Level...</div>
+</div>
+
+<!-- Dashboard -->
+<div class="dashboard" id="dashboard">
+  <div class="topbar">
+    <div>
+      <h1>Sales Dashboard</h1>
+    </div>
+    <div class="topbar-right">
+      <span class="badge" id="pipelineBadge"></span>
+      <span class="badge" id="lastUpdated"></span>
+      <button class="btn-sm" onclick="refreshData()">Refresh</button>
+      <button class="btn-sm" id="adminBtn" style="display:none" onclick="showAdminPanel()">Admin</button>
+      <button class="btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- Filters Bar -->
+    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:20px;">
+      <!-- Pipeline selector -->
+      <div id="pipelineSelector" style="display:none;">
+        <label style="font-size:11px; font-weight:600; color:var(--muted); margin-right:6px; text-transform:uppercase; letter-spacing:0.5px;">Pipeline:</label>
+        <select id="pipelineSelect" onchange="switchPipeline()" style="padding:8px 12px; background:var(--card); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px;"></select>
+      </div>
+
+      <!-- Date Range -->
+      <div style="display:flex; align-items:center; gap:8px; margin-left:auto;">
+        <button class="btn-sm date-preset active" data-range="all" onclick="setDateRange('all')">All Time</button>
+        <button class="btn-sm date-preset" data-range="7" onclick="setDateRange('7')">7d</button>
+        <button class="btn-sm date-preset" data-range="30" onclick="setDateRange('30')">30d</button>
+        <button class="btn-sm date-preset" data-range="90" onclick="setDateRange('90')">90d</button>
+        <button class="btn-sm date-preset" data-range="365" onclick="setDateRange('365')">1y</button>
+        <span style="color:var(--muted); font-size:12px; margin:0 4px;">|</span>
+        <input type="date" id="dateFrom" onchange="setDateRange('custom')" style="padding:7px 10px; background:var(--card); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:12px; color-scheme:dark;">
+        <span style="color:var(--muted); font-size:12px;">to</span>
+        <input type="date" id="dateTo" onchange="setDateRange('custom')" style="padding:7px 10px; background:var(--card); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:12px; color-scheme:dark;">
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <!-- Funnel -->
+    <div class="funnel" id="funnelSection"></div>
+
+    <!-- Charts -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>Deal Values by Stage</h3>
+        <canvas id="stageValueChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Opportunity Status Breakdown</h3>
+        <canvas id="statusChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Opportunities Created Over Time</h3>
+        <canvas id="timelineChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Lead Sources</h3>
+        <canvas id="sourceChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Recent Opportunities Table -->
+    <div class="table-card">
+      <h3>Recent Opportunities</h3>
+      <div style="overflow-x:auto">
+        <table id="oppsTable">
+          <thead>
+            <tr>
+              <th>Contact</th>
+              <th>Stage</th>
+              <th>Status</th>
+              <th>Value</th>
+              <th>Source</th>
+              <th>Created</th>
+              <th>Last Updated</th>
+            </tr>
+          </thead>
+          <tbody id="oppsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const BASE = '/api';
+let allPipelines = [];
+let allOpportunities = [];
+let currentPipelineId = '';
+let charts = {};
+let dateRangeMode = 'all';
+let isAdminUser = false;
+
+const COLORS = ['#6366f1','#8b5cf6','#06b6d4','#3b82f6','#22c55e','#f59e0b','#ef4444','#ec4899','#14b8a6','#f97316'];
+
+// ── Auth / Screen Management ──
+function hideAllScreens() {
+  ['loginScreen','adminLoginScreen','adminPanel','dashboard','loadingOverlay'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+}
+
+function showUserLogin() { hideAllScreens(); document.getElementById('loginScreen').style.display = 'flex'; }
+function showAdminLogin() { hideAllScreens(); document.getElementById('adminLoginScreen').style.display = 'flex'; }
+
+async function loginWithCode() {
+  const code = document.getElementById('inviteCodeInput').value.trim();
+  const errEl = document.getElementById('loginError');
+  if (!code) { errEl.textContent = 'Please enter an invite code.'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+
+  try {
+    const res = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Login failed');
+    isAdminUser = false;
+    loadDashboard();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+async function loginAsAdmin() {
+  const secret = document.getElementById('adminSecretInput').value.trim();
+  const errEl = document.getElementById('adminLoginError');
+  if (!secret) { errEl.textContent = 'Please enter the admin secret.'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+
+  try {
+    const res = await fetch('/auth/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Login failed');
+    isAdminUser = true;
+    showAdminPanel();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+async function logout() {
+  await fetch('/auth/logout', { method: 'POST' });
+  isAdminUser = false;
+  showUserLogin();
+}
+
+async function checkAuth() {
+  try {
+    const res = await fetch('/auth/check');
+    const data = await res.json();
+    if (data.isAdmin) { isAdminUser = true; showAdminPanel(); }
+    else if (data.authenticated) { loadDashboard(); }
+    else { showUserLogin(); }
+  } catch { showUserLogin(); }
+}
+
+// ── Admin Panel ──
+async function showAdminPanel() {
+  hideAllScreens();
+  document.getElementById('adminPanel').style.display = 'block';
+  refreshInvites();
+}
+
+async function showDashboardFromAdmin() {
+  loadDashboard();
+}
+
+async function refreshInvites() {
+  try {
+    const res = await fetch('/admin/invites');
+    const data = await res.json();
+    const invites = data.invites || {};
+    const tbody = document.getElementById('invitesBody');
+    const entries = Object.entries(invites).sort((a,b) => (b[1].createdAt||0) - (a[1].createdAt||0));
+    if (entries.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted); text-align:center; padding:24px;">No invite codes yet. Generate one above.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = entries.map(([code, inv]) => {
+      const date = inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : '—';
+      const statusClass = inv.active ? 'status-open' : 'status-lost';
+      const statusText = inv.active ? 'Active' : 'Revoked';
+      const action = inv.active
+        ? '<button class="btn-sm" onclick="revokeInvite(\'' + code + '\')" style="font-size:11px; padding:4px 10px;">Revoke</button>'
+        : '—';
+      return '<tr><td style="font-family:monospace; font-size:15px; font-weight:700; letter-spacing:2px;">' + code + '</td><td>' + esc(inv.label || '—') + '</td><td>' + date + '</td><td><span class="status-pill ' + statusClass + '">' + statusText + '</span></td><td>' + action + '</td></tr>';
+    }).join('');
+  } catch (e) { console.error('Failed to load invites:', e); }
+}
+
+async function createInvite() {
+  const label = document.getElementById('inviteLabelInput').value.trim();
+  try {
+    const res = await fetch('/admin/invites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label })
+    });
+    const data = await res.json();
+    document.getElementById('inviteLabelInput').value = '';
+    refreshInvites();
+    // Show the code prominently
+    alert('Invite code created: ' + data.code + '\n\nShare this with your team member.');
+  } catch (e) { alert('Failed to create invite: ' + e.message); }
+}
+
+async function revokeInvite(code) {
+  if (!confirm('Revoke code ' + code + '? Anyone using it will be logged out.')) return;
+  await fetch('/admin/invites/revoke', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code })
+  });
+  refreshInvites();
+}
+
+// ── API Helpers ──
+async function ghlGet(path, params) {
+  params = params || {};
+  var qs = Object.entries(params).filter(function(e) { return e[1]; }).map(function(e) { return encodeURIComponent(e[0]) + '=' + encodeURIComponent(e[1]); }).join('&');
+  var fullUrl = BASE + path + (qs ? '?' + qs : '');
+  var res = await fetch(fullUrl);
+  if (res.status === 401) { showUserLogin(); throw new Error('Session expired. Please log in again.'); }
+  if (!res.ok) {
+    var text = await res.text();
+    throw new Error('API ' + res.status + ': ' + text.substring(0, 200));
+  }
+  return res.json();
+}
+
+async function fetchAllOpportunities(pipelineId) {
+  var all = [];
+  var page = 1;
+  var hasMore = true;
+  while (hasMore && page <= 20) {
+    try {
+      var data = await ghlGet('/opportunities/search', {
+        location_id: '',
+        pipeline_id: pipelineId,
+        limit: '100',
+        page: String(page)
+      });
+      var opps = data.opportunities || [];
+      all = all.concat(opps);
+      hasMore = opps.length === 100;
+      page++;
+    } catch (e) {
+      console.warn('Pagination stopped:', e.message);
+      hasMore = false;
+    }
+  }
+  return all;
+}
+
+// ── Load Dashboard ──
+async function loadDashboard() {
+  hideAllScreens();
+  showLoading('Fetching pipelines...');
+
+  try {
+    var pipData = await ghlGet('/opportunities/pipelines', { locationId: '' });
+    allPipelines = pipData.pipelines || [];
+    if (allPipelines.length === 0) throw new Error('No pipelines found. Check GHL_LOCATION_ID on the server.');
+
+    if (allPipelines.length > 1) {
+      var sel = document.getElementById('pipelineSelect');
+      sel.innerHTML = allPipelines.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('');
+      document.getElementById('pipelineSelector').style.display = 'block';
+    }
+
+    var preferredPipeline = allPipelines.find(function(p) { return p.name.toLowerCase().includes('customer growth'); }) || allPipelines[0];
+    currentPipelineId = preferredPipeline.id;
+    document.getElementById('pipelineBadge').textContent = preferredPipeline.name;
+    var sel2 = document.getElementById('pipelineSelect');
+    if (sel2) sel2.value = currentPipelineId;
+
+    showLoading('Loading opportunities...');
+    allOpportunities = await fetchAllOpportunities(currentPipelineId);
+
+    hideLoading();
+    document.getElementById('dashboard').style.display = 'block';
+    renderDashboard();
+  } catch (e) {
+    hideLoading();
+    showUserLogin();
+    var errEl = document.getElementById('loginError');
+    errEl.textContent = e.message || 'Failed to load dashboard.';
+    errEl.style.display = 'block';
+  }
+}
+
+function disconnect() {
+  logout();
+}
+
+async function refreshData() {
+  showLoading('Refreshing data...');
+  try {
+    allOpportunities = await fetchAllOpportunities(currentPipelineId);
+    hideLoading();
+    renderDashboard();
+  } catch (e) {
+    hideLoading();
+    alert('Refresh failed: ' + e.message);
+  }
+}
+
+async function switchPipeline() {
+  const sel = document.getElementById('pipelineSelect');
+  currentPipelineId = sel.value;
+  const pip = allPipelines.find(p => p.id === currentPipelineId);
+  document.getElementById('pipelineBadge').textContent = pip ? pip.name : '';
+  showLoading('Loading pipeline...');
+  try {
+    allOpportunities = await fetchAllOpportunities(currentPipelineId);
+    hideLoading();
+    renderDashboard();
+  } catch (e) {
+    hideLoading();
+    alert('Failed: ' + e.message);
+  }
+}
+
+function showLoading(msg) {
+  document.getElementById('loadingText').textContent = msg;
+  document.getElementById('loadingOverlay').style.display = 'flex';
+}
+function hideLoading() {
+  document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+// ── Date Filtering ──
+function setDateRange(mode) {
+  dateRangeMode = mode;
+  // Update active button
+  document.querySelectorAll('.date-preset').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.range === mode);
+  });
+  if (mode === 'custom') {
+    document.querySelectorAll('.date-preset').forEach(btn => btn.classList.remove('active'));
+  }
+  renderDashboard();
+}
+
+function getFilteredOpps() {
+  if (dateRangeMode === 'all') return allOpportunities;
+
+  let from, to;
+  if (dateRangeMode === 'custom') {
+    const f = document.getElementById('dateFrom').value;
+    const t = document.getElementById('dateTo').value;
+    if (!f && !t) return allOpportunities;
+    from = f ? new Date(f + 'T00:00:00') : null;
+    to = t ? new Date(t + 'T23:59:59') : null;
+  } else {
+    const days = parseInt(dateRangeMode);
+    to = new Date();
+    from = new Date();
+    from.setDate(from.getDate() - days);
+  }
+
+  return allOpportunities.filter(o => {
+    const d = new Date(o.createdAt);
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  });
+}
+
+// ── Render Dashboard ──
+function renderDashboard() {
+  const opps = getFilteredOpps();
+  const pipeline = allPipelines.find(p => p.id === currentPipelineId);
+  const stages = pipeline ? (pipeline.stages || []) : [];
+
+  // Timestamp
+  document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+  // ── KPIs ──
+  const totalOpps = opps.length;
+  const totalValue = opps.reduce((s, o) => s + (o.monetaryValue || 0), 0);
+  const wonOpps = opps.filter(o => o.status === 'won');
+  const lostOpps = opps.filter(o => o.status === 'lost');
+  const openOpps = opps.filter(o => o.status === 'open');
+  const wonValue = wonOpps.reduce((s, o) => s + (o.monetaryValue || 0), 0);
+  const openValue = openOpps.reduce((s, o) => s + (o.monetaryValue || 0), 0);
+  const winRate = totalOpps > 0 ? ((wonOpps.length / (wonOpps.length + lostOpps.length)) * 100) : 0;
+  const avgDealValue = wonOpps.length > 0 ? wonValue / wonOpps.length : 0;
+
+  const kpis = [
+    { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: `${openOpps.length} open` },
+    { label: 'Total Pipeline Value', value: '£' + totalValue.toLocaleString(), sub: `£${openValue.toLocaleString()} open` },
+    { label: 'Won Revenue', value: '£' + wonValue.toLocaleString(), sub: `${wonOpps.length} deals closed` },
+    { label: 'Win Rate', value: (winRate || 0).toFixed(1) + '%', sub: `${wonOpps.length}W / ${lostOpps.length}L` },
+    { label: 'Avg Deal Size (Won)', value: '£' + avgDealValue.toLocaleString(undefined, {maximumFractionDigits:0}), sub: `from ${wonOpps.length} deals` },
+  ];
+
+  document.getElementById('kpiRow').innerHTML = kpis.map(k => `
+    <div class="kpi-card">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>
+  `).join('');
+
+  // ── Funnel ──
+  const stageMap = {};
+  stages.forEach(s => { stageMap[s.id] = { name: s.name, count: 0, value: 0, opps: [] }; });
+  opps.forEach(o => {
+    const sid = o.pipelineStageId || o.stageId;
+    if (stageMap[sid]) {
+      stageMap[sid].count++;
+      stageMap[sid].value += (o.monetaryValue || 0);
+      stageMap[sid].opps.push(o);
+    }
+  });
+  const maxCount = Math.max(...Object.values(stageMap).map(s => s.count), 1);
+
+  let funnelHTML = '<h3>Pipeline Funnel</h3><div class="funnel-stages">';
+  stages.forEach((s, i) => {
+    const data = stageMap[s.id] || { count: 0, value: 0, opps: [] };
+    const pct = (data.count / maxCount) * 100;
+    const color = COLORS[i % COLORS.length];
+
+    // Build tooltip rows with customer name + time in stage
+    let tooltipRows = '';
+    if (data.opps.length > 0) {
+      const sortedOpps = [...data.opps].sort((a,b) => new Date(a.lastStageChangeAt || a.updatedAt || a.createdAt || 0) - new Date(b.lastStageChangeAt || b.updatedAt || b.createdAt || 0));
+      tooltipRows = sortedOpps.map(o => {
+        const name = o.contact ? (o.contact.name || o.contact.email || o.contact.phone || 'Unknown') : (o.name || 'Unknown');
+        const val = o.monetaryValue ? '£' + o.monetaryValue.toLocaleString() : '—';
+        const stageDate = new Date(o.lastStageChangeAt || o.updatedAt || o.createdAt || Date.now());
+        const daysInStage = Math.max(0, Math.floor((Date.now() - stageDate) / (1000 * 60 * 60 * 24)));
+        const timeStr = daysInStage === 0 ? 'Today' : daysInStage === 1 ? '1 day' : daysInStage + ' days';
+        return '<tr><td>' + esc(name) + '</td><td>' + val + '</td><td class="time-in-stage">' + timeStr + '</td></tr>';
+      }).join('');
+    } else {
+      tooltipRows = '<tr><td colspan="3" style="color:var(--muted); text-align:center; padding:12px;">No deals in this stage</td></tr>';
+    }
+
+    const stageName = data.name || s.name;
+    const dealWord = data.count !== 1 ? 'deals' : 'deal';
+    funnelHTML += '<div class="funnel-bar">'
+      + '<div class="funnel-label">' + esc(stageName) + '</div>'
+      + '<div class="funnel-track"><div class="funnel-fill" style="width:' + Math.max(pct, 3) + '%; background:' + color + '">' + data.count + '</div></div>'
+      + '<div class="funnel-stats"><strong>£' + data.value.toLocaleString() + '</strong> &middot; ' + data.count + ' ' + dealWord + '</div>'
+      + '<div class="funnel-tooltip">'
+      + '<h4>' + esc(stageName) + ' — ' + data.count + ' ' + dealWord + '</h4>'
+      + '<table><thead><tr><th>Customer</th><th>Value</th><th>Time in Stage</th></tr></thead>'
+      + '<tbody>' + tooltipRows + '</tbody></table>'
+      + '</div></div>';
+  });
+  funnelHTML += '</div>';
+  document.getElementById('funnelSection').innerHTML = funnelHTML;
+
+  // ── Charts ──
+  // Destroy existing
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+
+  // 1. Deal value by stage (bar)
+  const stageLabels = stages.map(s => (stageMap[s.id] || {}).name || s.name);
+  const stageValues = stages.map(s => (stageMap[s.id] || {}).value || 0);
+  charts.stageValue = new Chart(document.getElementById('stageValueChart'), {
+    type: 'bar',
+    data: {
+      labels: stageLabels,
+      datasets: [{
+        label: 'Deal Value (£)',
+        data: stageValues,
+        backgroundColor: stages.map((_, i) => COLORS[i % COLORS.length] + 'cc'),
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: chartOpts('£')
+  });
+
+  // 2. Status breakdown (doughnut)
+  const statusCounts = { open: openOpps.length, won: wonOpps.length, lost: lostOpps.length, abandoned: opps.filter(o => o.status === 'abandoned').length };
+  charts.status = new Chart(document.getElementById('statusChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Open', 'Won', 'Lost', 'Abandoned'],
+      datasets: [{
+        data: [statusCounts.open, statusCounts.won, statusCounts.lost, statusCounts.abandoned],
+        backgroundColor: [var_blue, var_green, var_red, '#71717a'],
+        borderWidth: 0
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#e4e4e7', padding: 16, font: { size: 12 } } } } }
+  });
+
+  // 3. Timeline (line)
+  const timeData = buildTimeline(opps);
+  charts.timeline = new Chart(document.getElementById('timelineChart'), {
+    type: 'line',
+    data: {
+      labels: timeData.labels,
+      datasets: [{
+        label: 'Opportunities Created',
+        data: timeData.counts,
+        borderColor: var_accent,
+        backgroundColor: var_accent + '22',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        pointBackgroundColor: var_accent,
+      }]
+    },
+    options: chartOpts()
+  });
+
+  // 4. Lead sources (horizontal bar)
+  const sources = {};
+  opps.forEach(o => {
+    const src = o.source || o.leadSource || 'Unknown';
+    sources[src] = (sources[src] || 0) + 1;
+  });
+  const sortedSources = Object.entries(sources).sort((a,b) => b[1] - a[1]).slice(0, 10);
+  charts.source = new Chart(document.getElementById('sourceChart'), {
+    type: 'bar',
+    data: {
+      labels: sortedSources.map(s => s[0]),
+      datasets: [{
+        label: 'Leads',
+        data: sortedSources.map(s => s[1]),
+        backgroundColor: COLORS.slice(0, sortedSources.length).map(c => c + 'cc'),
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: { ...chartOpts(), indexAxis: 'y' }
+  });
+
+  // ── Table ──
+  const sorted = [...opps].sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 50);
+  const stageIdNameMap = {};
+  stages.forEach(s => stageIdNameMap[s.id] = s.name);
+
+  document.getElementById('oppsBody').innerHTML = sorted.map(o => {
+    const stageName = stageIdNameMap[o.pipelineStageId || o.stageId] || o.pipelineStageId || '—';
+    const status = o.status || 'open';
+    const statusClass = `status-${status}`;
+    const contactName = o.contact ? (o.contact.name || o.contact.email || o.contact.phone || '—') : (o.name || '—');
+    const value = o.monetaryValue ? '£' + o.monetaryValue.toLocaleString() : '—';
+    const source = o.source || o.leadSource || '—';
+    const created = o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—';
+    const updated = o.updatedAt ? new Date(o.updatedAt).toLocaleDateString() : '—';
+    return `<tr>
+      <td>${esc(contactName)}</td>
+      <td>${esc(stageName)}</td>
+      <td><span class="status-pill ${statusClass}">${status}</span></td>
+      <td>${value}</td>
+      <td>${esc(source)}</td>
+      <td>${created}</td>
+      <td>${updated}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Helpers ──
+const var_accent = '#6366f1';
+const var_blue = '#3b82f6';
+const var_green = '#22c55e';
+const var_red = '#ef4444';
+
+function chartOpts(prefix) {
+  return {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: prefix === '£' ? {
+          label: ctx => '£' + ctx.parsed.y.toLocaleString()
+        } : {}
+      }
+    },
+    scales: {
+      x: { ticks: { color: '#71717a', font: { size: 11 } }, grid: { color: '#2a2d3a' } },
+      y: {
+        ticks: {
+          color: '#71717a',
+          font: { size: 11 },
+          callback: prefix === '£' ? v => '£' + v.toLocaleString() : undefined
+        },
+        grid: { color: '#2a2d3a' }
+      }
+    }
+  };
+}
+
+function buildTimeline(opps) {
+  const counts = {};
+  opps.forEach(o => {
+    if (o.createdAt) {
+      const d = new Date(o.createdAt);
+      const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+      counts[key] = (counts[key] || 0) + 1;
+    }
+  });
+  const sorted = Object.entries(counts).sort((a,b) => a[0].localeCompare(b[0]));
+  // Fill gaps
+  if (sorted.length >= 2) {
+    const start = new Date(sorted[0][0] + '-01');
+    const end = new Date(sorted[sorted.length-1][0] + '-01');
+    const filled = [];
+    const cur = new Date(start);
+    while (cur <= end) {
+      const key = cur.getFullYear() + '-' + String(cur.getMonth()+1).padStart(2,'0');
+      filled.push([key, counts[key] || 0]);
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return { labels: filled.map(f => formatMonth(f[0])), counts: filled.map(f => f[1]) };
+  }
+  return { labels: sorted.map(s => formatMonth(s[0])), counts: sorted.map(s => s[1]) };
+}
+
+function formatMonth(ym) {
+  const [y, m] = ym.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months[parseInt(m)-1] + ' ' + y;
+}
+
+function esc(s) {
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── Show admin button if admin, then auto-login check ──
+window.addEventListener('DOMContentLoaded', function() {
+  checkAuth().then(function() {
+    if (isAdminUser) {
+      var btn = document.getElementById('adminBtn');
+      if (btn) btn.style.display = '';
+    }
+  });
+});
+</script>
+</body>
+</html>

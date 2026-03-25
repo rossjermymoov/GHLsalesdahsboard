@@ -1,0 +1,12 @@
+{
+  "name": "ghl-sales-dashboard",
+  "version": "1.0.0",
+  "description": "Sales dashboard for Go High Level with invite-based access",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
