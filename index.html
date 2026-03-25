@@ -113,17 +113,54 @@
 </head>
 <body>
 
-<!-- Login Screen -->
+<!-- Login Screen — email + password -->
 <div class="setup-screen" id="loginScreen">
   <div class="setup-card">
     <h1>Sales Dashboard</h1>
-    <p>Enter your invite code to access the dashboard. Don't have one? Ask your admin.</p>
+    <p>Sign in to access your dashboard.</p>
     <div class="error-msg" id="loginError"></div>
+    <label>Email</label>
+    <input type="email" id="loginEmailInput" placeholder="you@company.com">
+    <label>Password</label>
+    <input type="password" id="loginPasswordInput" placeholder="Your password">
+    <button class="btn-primary" onclick="loginWithEmail()">Sign In</button>
+    <div style="margin-top:20px; text-align:center; display:flex; justify-content:center; gap:20px;">
+      <a href="#" onclick="showInviteScreen(); return false;" style="color:var(--accent); font-size:12px; text-decoration:none;">I have an invite code</a>
+      <a href="#" onclick="showAdminLogin(); return false;" style="color:var(--muted); font-size:12px; text-decoration:none;">Admin login</a>
+    </div>
+  </div>
+</div>
+
+<!-- Invite Code Screen (step 1 of registration) -->
+<div class="setup-screen" id="inviteScreen" style="display:none">
+  <div class="setup-card">
+    <h1>Enter Invite Code</h1>
+    <p>Your admin should have given you a 6-character code.</p>
+    <div class="error-msg" id="inviteError"></div>
     <label>Invite Code</label>
     <input type="text" id="inviteCodeInput" placeholder="A3F1B2" style="text-transform:uppercase; letter-spacing:2px; font-size:18px; text-align:center;">
-    <button class="btn-primary" onclick="loginWithCode()">Access Dashboard</button>
+    <button class="btn-primary" onclick="validateInvite()">Continue</button>
     <div style="margin-top:20px; text-align:center;">
-      <a href="#" onclick="showAdminLogin(); return false;" style="color:var(--muted); font-size:12px; text-decoration:none;">Admin login</a>
+      <a href="#" onclick="showUserLogin(); return false;" style="color:var(--muted); font-size:12px; text-decoration:none;">Already have an account? Sign in</a>
+    </div>
+  </div>
+</div>
+
+<!-- Registration Screen (step 2 — after valid invite code) -->
+<div class="setup-screen" id="registerScreen" style="display:none">
+  <div class="setup-card">
+    <h1>Create Your Account</h1>
+    <p>Set up your login details for the dashboard.</p>
+    <div class="error-msg" id="registerError"></div>
+    <label>Name</label>
+    <input type="text" id="registerNameInput" placeholder="Your full name">
+    <label>Email</label>
+    <input type="email" id="registerEmailInput" placeholder="you@company.com">
+    <label>Password</label>
+    <input type="password" id="registerPasswordInput" placeholder="At least 6 characters">
+    <button class="btn-primary" onclick="registerAccount()">Create Account</button>
+    <div style="margin-top:20px; text-align:center;">
+      <a href="#" onclick="showInviteScreen(); return false;" style="color:var(--muted); font-size:12px; text-decoration:none;">Back</a>
     </div>
   </div>
 </div>
@@ -132,13 +169,13 @@
 <div class="setup-screen" id="adminLoginScreen" style="display:none">
   <div class="setup-card">
     <h1>Admin Login</h1>
-    <p>Enter the admin secret shown in your server terminal.</p>
+    <p>Enter the admin secret from your Railway environment variables.</p>
     <div class="error-msg" id="adminLoginError"></div>
     <label>Admin Secret</label>
     <input type="password" id="adminSecretInput" placeholder="your-admin-secret">
     <button class="btn-primary" onclick="loginAsAdmin()">Login as Admin</button>
     <div style="margin-top:20px; text-align:center;">
-      <a href="#" onclick="showUserLogin(); return false;" style="color:var(--muted); font-size:12px; text-decoration:none;">Back to invite code login</a>
+      <a href="#" onclick="showUserLogin(); return false;" style="color:var(--muted); font-size:12px; text-decoration:none;">Back to sign in</a>
     </div>
   </div>
 </div>
@@ -146,34 +183,57 @@
 <!-- Admin Panel -->
 <div class="dashboard" id="adminPanel" style="display:none">
   <div class="topbar">
-    <div><h1>Admin — Invite Management</h1></div>
+    <div><h1>Admin Panel</h1></div>
     <div class="topbar-right">
       <button class="btn-sm" onclick="showDashboardFromAdmin()">View Dashboard</button>
       <button class="btn-sm" onclick="logout()">Logout</button>
     </div>
   </div>
   <div class="main">
+    <!-- Invite someone -->
     <div style="display:flex; gap:16px; margin-bottom:24px; align-items:flex-end;">
       <div style="flex:1;">
-        <label style="font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:6px;">Label (optional)</label>
-        <input type="text" id="inviteLabelInput" placeholder="e.g. Sarah - Sales Team" style="width:100%; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px;">
+        <label style="font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:6px;">Person's Name</label>
+        <input type="text" id="inviteNameInput" placeholder="e.g. Sarah Johnson" style="width:100%; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px;">
       </div>
       <button class="btn-primary" style="width:auto; padding:10px 24px;" onclick="createInvite()">Generate Invite Code</button>
     </div>
-    <div class="table-card">
+
+    <!-- Invite Codes -->
+    <div class="table-card" style="margin-bottom:24px;">
       <h3>Invite Codes</h3>
       <div style="overflow-x:auto">
         <table>
           <thead>
             <tr>
               <th>Code</th>
-              <th>Label</th>
+              <th>Invited Name</th>
               <th>Created</th>
               <th>Status</th>
+              <th>Registered As</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody id="invitesBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Registered Users -->
+    <div class="table-card">
+      <h3>Registered Users</h3>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Joined</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody"></tbody>
         </table>
       </div>
     </div>
@@ -285,28 +345,88 @@ let isAdminUser = false;
 const COLORS = ['#6366f1','#8b5cf6','#06b6d4','#3b82f6','#22c55e','#f59e0b','#ef4444','#ec4899','#14b8a6','#f97316'];
 
 // ── Auth / Screen Management ──
+var pendingInviteCode = '';
+
 function hideAllScreens() {
-  ['loginScreen','adminLoginScreen','adminPanel','dashboard','loadingOverlay'].forEach(id => {
+  ['loginScreen','inviteScreen','registerScreen','adminLoginScreen','adminPanel','dashboard','loadingOverlay'].forEach(function(id) {
     document.getElementById(id).style.display = 'none';
   });
 }
 
 function showUserLogin() { hideAllScreens(); document.getElementById('loginScreen').style.display = 'flex'; }
+function showInviteScreen() { hideAllScreens(); document.getElementById('inviteScreen').style.display = 'flex'; }
+function showRegisterScreen() { hideAllScreens(); document.getElementById('registerScreen').style.display = 'flex'; }
 function showAdminLogin() { hideAllScreens(); document.getElementById('adminLoginScreen').style.display = 'flex'; }
 
-async function loginWithCode() {
-  const code = document.getElementById('inviteCodeInput').value.trim();
-  const errEl = document.getElementById('loginError');
+// Step 1: Validate invite code
+async function validateInvite() {
+  var code = document.getElementById('inviteCodeInput').value.trim();
+  var errEl = document.getElementById('inviteError');
   if (!code) { errEl.textContent = 'Please enter an invite code.'; errEl.style.display = 'block'; return; }
   errEl.style.display = 'none';
 
   try {
-    const res = await fetch('/auth/login', {
+    var res = await fetch('/auth/validate-invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code })
+      body: JSON.stringify({ code: code })
     });
-    const data = await res.json();
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Invalid code');
+    pendingInviteCode = code.toUpperCase();
+    // Pre-fill name if admin set one
+    if (data.name) document.getElementById('registerNameInput').value = data.name;
+    showRegisterScreen();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+// Step 2: Register with email + password
+async function registerAccount() {
+  var name = document.getElementById('registerNameInput').value.trim();
+  var email = document.getElementById('registerEmailInput').value.trim();
+  var password = document.getElementById('registerPasswordInput').value;
+  var errEl = document.getElementById('registerError');
+
+  if (!name) { errEl.textContent = 'Please enter your name.'; errEl.style.display = 'block'; return; }
+  if (!email) { errEl.textContent = 'Please enter your email.'; errEl.style.display = 'block'; return; }
+  if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+
+  try {
+    var res = await fetch('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: pendingInviteCode, name: name, email: email, password: password })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Registration failed');
+    isAdminUser = false;
+    loadDashboard();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+// Login with email + password
+async function loginWithEmail() {
+  var email = document.getElementById('loginEmailInput').value.trim();
+  var password = document.getElementById('loginPasswordInput').value;
+  var errEl = document.getElementById('loginError');
+
+  if (!email || !password) { errEl.textContent = 'Please enter your email and password.'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+
+  try {
+    var res = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: password })
+    });
+    var data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Login failed');
     isAdminUser = false;
     loadDashboard();
@@ -317,18 +437,18 @@ async function loginWithCode() {
 }
 
 async function loginAsAdmin() {
-  const secret = document.getElementById('adminSecretInput').value.trim();
-  const errEl = document.getElementById('adminLoginError');
+  var secret = document.getElementById('adminSecretInput').value.trim();
+  var errEl = document.getElementById('adminLoginError');
   if (!secret) { errEl.textContent = 'Please enter the admin secret.'; errEl.style.display = 'block'; return; }
   errEl.style.display = 'none';
 
   try {
-    const res = await fetch('/auth/admin', {
+    var res = await fetch('/auth/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret })
+      body: JSON.stringify({ secret: secret })
     });
-    const data = await res.json();
+    var data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Login failed');
     isAdminUser = true;
     showAdminPanel();
@@ -346,12 +466,12 @@ async function logout() {
 
 async function checkAuth() {
   try {
-    const res = await fetch('/auth/check');
-    const data = await res.json();
+    var res = await fetch('/auth/check');
+    var data = await res.json();
     if (data.isAdmin) { isAdminUser = true; showAdminPanel(); }
     else if (data.authenticated) { loadDashboard(); }
     else { showUserLogin(); }
-  } catch { showUserLogin(); }
+  } catch (e) { showUserLogin(); }
 }
 
 // ── Admin Panel ──
@@ -359,6 +479,7 @@ async function showAdminPanel() {
   hideAllScreens();
   document.getElementById('adminPanel').style.display = 'block';
   refreshInvites();
+  refreshUsers();
 }
 
 async function showDashboardFromAdmin() {
@@ -367,51 +488,96 @@ async function showDashboardFromAdmin() {
 
 async function refreshInvites() {
   try {
-    const res = await fetch('/admin/invites');
-    const data = await res.json();
-    const invites = data.invites || {};
-    const tbody = document.getElementById('invitesBody');
-    const entries = Object.entries(invites).sort((a,b) => (b[1].createdAt||0) - (a[1].createdAt||0));
+    var res = await fetch('/admin/invites');
+    var data = await res.json();
+    var inv = data.invites || {};
+    var tbody = document.getElementById('invitesBody');
+    var entries = Object.entries(inv).sort(function(a,b) { return (b[1].createdAt||0) - (a[1].createdAt||0); });
     if (entries.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted); text-align:center; padding:24px;">No invite codes yet. Generate one above.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted); text-align:center; padding:24px;">No invite codes yet. Generate one above.</td></tr>';
       return;
     }
-    tbody.innerHTML = entries.map(([code, inv]) => {
-      const date = inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : '—';
-      const statusClass = inv.active ? 'status-open' : 'status-lost';
-      const statusText = inv.active ? 'Active' : 'Revoked';
-      const action = inv.active
+    tbody.innerHTML = entries.map(function(entry) {
+      var code = entry[0], i = entry[1];
+      var date = i.createdAt ? new Date(i.createdAt).toLocaleDateString() : '—';
+      var statusClass = i.active ? 'status-open' : (i.usedBy ? 'status-won' : 'status-lost');
+      var statusText = i.active ? 'Pending' : (i.usedBy ? 'Registered' : 'Revoked');
+      var usedBy = i.usedBy ? esc(i.usedBy) : '—';
+      var action = i.active
         ? '<button class="btn-sm" onclick="revokeInvite(\'' + code + '\')" style="font-size:11px; padding:4px 10px;">Revoke</button>'
         : '—';
-      return '<tr><td style="font-family:monospace; font-size:15px; font-weight:700; letter-spacing:2px;">' + code + '</td><td>' + esc(inv.label || '—') + '</td><td>' + date + '</td><td><span class="status-pill ' + statusClass + '">' + statusText + '</span></td><td>' + action + '</td></tr>';
+      return '<tr><td style="font-family:monospace; font-size:15px; font-weight:700; letter-spacing:2px;">' + code + '</td><td>' + esc(i.name || '—') + '</td><td>' + date + '</td><td><span class="status-pill ' + statusClass + '">' + statusText + '</span></td><td>' + usedBy + '</td><td>' + action + '</td></tr>';
     }).join('');
   } catch (e) { console.error('Failed to load invites:', e); }
 }
 
-async function createInvite() {
-  const label = document.getElementById('inviteLabelInput').value.trim();
+async function refreshUsers() {
   try {
-    const res = await fetch('/admin/invites', {
+    var res = await fetch('/admin/users');
+    var data = await res.json();
+    var u = data.users || {};
+    var tbody = document.getElementById('usersBody');
+    var entries = Object.entries(u).sort(function(a,b) { return (b[1].createdAt||0) - (a[1].createdAt||0); });
+    if (entries.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted); text-align:center; padding:24px;">No registered users yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = entries.map(function(entry) {
+      var email = entry[0], usr = entry[1];
+      var date = usr.createdAt ? new Date(usr.createdAt).toLocaleDateString() : '—';
+      var statusClass = usr.active ? 'status-open' : 'status-lost';
+      var statusText = usr.active ? 'Active' : 'Disabled';
+      var action = usr.active
+        ? '<button class="btn-sm" onclick="deactivateUser(\'' + esc(email) + '\')" style="font-size:11px; padding:4px 10px;">Disable</button>'
+        : '<button class="btn-sm" onclick="activateUser(\'' + esc(email) + '\')" style="font-size:11px; padding:4px 10px;">Enable</button>';
+      return '<tr><td>' + esc(usr.name) + '</td><td>' + esc(email) + '</td><td>' + date + '</td><td><span class="status-pill ' + statusClass + '">' + statusText + '</span></td><td>' + action + '</td></tr>';
+    }).join('');
+  } catch (e) { console.error('Failed to load users:', e); }
+}
+
+async function createInvite() {
+  var name = document.getElementById('inviteNameInput').value.trim();
+  if (!name) { alert('Please enter the person\'s name.'); return; }
+  try {
+    var res = await fetch('/admin/invites', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label })
+      body: JSON.stringify({ name: name })
     });
-    const data = await res.json();
-    document.getElementById('inviteLabelInput').value = '';
+    var data = await res.json();
+    document.getElementById('inviteNameInput').value = '';
     refreshInvites();
-    // Show the code prominently
-    alert('Invite code created: ' + data.code + '\n\nShare this with your team member.');
+    alert('Invite code for ' + name + ': ' + data.code + '\n\nSend them this code to register.');
   } catch (e) { alert('Failed to create invite: ' + e.message); }
 }
 
 async function revokeInvite(code) {
-  if (!confirm('Revoke code ' + code + '? Anyone using it will be logged out.')) return;
+  if (!confirm('Revoke invite ' + code + '?')) return;
   await fetch('/admin/invites/revoke', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code })
+    body: JSON.stringify({ code: code })
   });
   refreshInvites();
+}
+
+async function deactivateUser(email) {
+  if (!confirm('Disable access for ' + email + '? They will be logged out immediately.')) return;
+  await fetch('/admin/users/deactivate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email })
+  });
+  refreshUsers();
+}
+
+async function activateUser(email) {
+  await fetch('/admin/users/activate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email })
+  });
+  refreshUsers();
 }
 
 // ── API Helpers ──

@@ -4,73 +4,84 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// ── Config (from environment variables) ──
+// ── Config ──
 const PORT = process.env.PORT || 3456;
 const GHL_API_KEY = process.env.GHL_API_KEY || '';
 const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID || '';
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-' + crypto.randomBytes(4).toString('hex');
 const GHL_BASE = 'services.leadconnectorhq.com';
 
-// ── Invite code store (persisted to JSON file) ──
+// ── Data stores (persisted to JSON) ──
 const INVITES_FILE = path.join(__dirname, 'invites.json');
-let invites = {}; // { code: { createdAt, createdBy, label, active } }
-let sessions = {}; // { sessionToken: { code, createdAt } }
+const USERS_FILE = path.join(__dirname, 'users.json');
 
-function loadInvites() {
-  try {
-    if (fs.existsSync(INVITES_FILE)) {
-      invites = JSON.parse(fs.readFileSync(INVITES_FILE, 'utf8'));
-    }
-  } catch (e) { invites = {}; }
-}
-function saveInvites() {
-  fs.writeFileSync(INVITES_FILE, JSON.stringify(invites, null, 2));
-}
-loadInvites();
+let invites = {};   // { code: { name, createdAt, active, usedBy } }
+let users = {};      // { email: { name, passwordHash, salt, inviteCode, createdAt, active } }
+let sessions = {};   // { token: { email, createdAt, isAdmin } }
 
-function generateCode() {
-  return crypto.randomBytes(3).toString('hex').toUpperCase(); // e.g. "A3F1B2"
+function loadData() {
+  try { if (fs.existsSync(INVITES_FILE)) invites = JSON.parse(fs.readFileSync(INVITES_FILE, 'utf8')); } catch (e) { invites = {}; }
+  try { if (fs.existsSync(USERS_FILE)) users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch (e) { users = {}; }
 }
-function generateSession() {
-  return crypto.randomBytes(24).toString('hex');
+function saveInvites() { fs.writeFileSync(INVITES_FILE, JSON.stringify(invites, null, 2)); }
+function saveUsers() { fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2)); }
+loadData();
+
+// ── Password hashing (scrypt — built into Node, no dependencies) ──
+function hashPassword(password) {
+  return new Promise((resolve, reject) => {
+    const salt = crypto.randomBytes(16).toString('hex');
+    crypto.scrypt(password, salt, 64, (err, key) => {
+      if (err) reject(err);
+      resolve({ hash: key.toString('hex'), salt });
+    });
+  });
 }
 
-// ── Parse helpers ──
+function verifyPassword(password, hash, salt) {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, 64, (err, key) => {
+      if (err) reject(err);
+      resolve(key.toString('hex') === hash);
+    });
+  });
+}
+
+function generateCode() { return crypto.randomBytes(3).toString('hex').toUpperCase(); }
+function generateSession() { return crypto.randomBytes(24).toString('hex'); }
+
+// ── Helpers ──
 function parseBody(req) {
   return new Promise((resolve) => {
     let body = '';
     req.on('data', c => body += c);
-    req.on('end', () => {
-      try { resolve(JSON.parse(body)); } catch { resolve({}); }
-    });
+    req.on('end', () => { try { resolve(JSON.parse(body)); } catch { resolve({}); } });
   });
 }
 
 function parseCookies(req) {
   const cookies = {};
   (req.headers.cookie || '').split(';').forEach(c => {
-    const [k, v] = c.trim().split('=');
-    if (k) cookies[k] = v;
+    const parts = c.trim().split('=');
+    if (parts[0]) cookies[parts[0]] = parts.slice(1).join('=');
   });
   return cookies;
 }
 
-function isAuthenticated(req) {
+function getSession(req) {
   const cookies = parseCookies(req);
   const token = cookies['ghl_session'];
-  if (!token || !sessions[token]) return false;
-  // Sessions last 7 days
+  if (!token || !sessions[token]) return null;
   const s = sessions[token];
-  if (Date.now() - s.createdAt > 7 * 24 * 60 * 60 * 1000) {
-    delete sessions[token];
-    return false;
-  }
-  return true;
+  if (Date.now() - s.createdAt > 7 * 24 * 60 * 60 * 1000) { delete sessions[token]; return null; }
+  return s;
 }
 
+function isAuthenticated(req) { return !!getSession(req); }
+
 function isAdmin(req) {
-  const cookies = parseCookies(req);
-  return cookies['ghl_admin'] === ADMIN_SECRET;
+  const s = getSession(req);
+  return s && s.isAdmin;
 }
 
 function jsonResponse(res, status, data) {
@@ -78,11 +89,14 @@ function jsonResponse(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+function setCookie(res, name, value, maxAge) {
+  return name + '=' + value + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' + maxAge;
+}
+
 // ── Server ──
 const server = http.createServer(async (req, res) => {
   const url = req.url.split('?')[0];
 
-  // ── CORS preflight ──
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
@@ -93,33 +107,105 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ── Auth endpoints ──
+  // ════════════════════════════════════════
+  // AUTH ENDPOINTS
+  // ════════════════════════════════════════
 
-  // POST /auth/login — validate invite code, set session cookie
-  if (url === '/auth/login' && req.method === 'POST') {
+  // POST /auth/validate-invite — check if invite code is valid (step 1 of registration)
+  if (url === '/auth/validate-invite' && req.method === 'POST') {
     const body = await parseBody(req);
     const code = (body.code || '').trim().toUpperCase();
     if (invites[code] && invites[code].active) {
-      const token = generateSession();
-      sessions[token] = { code, createdAt: Date.now() };
-      res.writeHead(200, {
-        'Content-Type': 'application/json',
-        'Set-Cookie': 'ghl_session=' + token + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800'
-      });
-      res.end(JSON.stringify({ ok: true }));
+      jsonResponse(res, 200, { ok: true, name: invites[code].name || '' });
     } else {
       jsonResponse(res, 401, { error: 'Invalid or expired invite code.' });
     }
     return;
   }
 
-  // POST /auth/admin — admin login with secret
+  // POST /auth/register — create account with invite code + email + password (step 2)
+  if (url === '/auth/register' && req.method === 'POST') {
+    const body = await parseBody(req);
+    const code = (body.code || '').trim().toUpperCase();
+    const email = (body.email || '').trim().toLowerCase();
+    const password = body.password || '';
+    const name = (body.name || '').trim();
+
+    if (!invites[code] || !invites[code].active) {
+      return jsonResponse(res, 401, { error: 'Invalid or expired invite code.' });
+    }
+    if (!email || !email.includes('@')) {
+      return jsonResponse(res, 400, { error: 'Please enter a valid email address.' });
+    }
+    if (password.length < 6) {
+      return jsonResponse(res, 400, { error: 'Password must be at least 6 characters.' });
+    }
+    if (users[email]) {
+      return jsonResponse(res, 400, { error: 'An account with this email already exists. Try logging in instead.' });
+    }
+
+    const { hash, salt } = await hashPassword(password);
+    users[email] = {
+      name: name || invites[code].name || email.split('@')[0],
+      passwordHash: hash,
+      salt: salt,
+      inviteCode: code,
+      createdAt: Date.now(),
+      active: true
+    };
+    saveUsers();
+
+    // Mark invite as used
+    invites[code].usedBy = email;
+    invites[code].active = false;
+    saveInvites();
+
+    // Auto-login after registration
+    const token = generateSession();
+    sessions[token] = { email, createdAt: Date.now(), isAdmin: false };
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Set-Cookie': setCookie(res, 'ghl_session', token, 604800)
+    });
+    res.end(JSON.stringify({ ok: true, name: users[email].name }));
+    return;
+  }
+
+  // POST /auth/login — login with email + password
+  if (url === '/auth/login' && req.method === 'POST') {
+    const body = await parseBody(req);
+    const email = (body.email || '').trim().toLowerCase();
+    const password = body.password || '';
+
+    const user = users[email];
+    if (!user || !user.active) {
+      return jsonResponse(res, 401, { error: 'Invalid email or password.' });
+    }
+
+    const valid = await verifyPassword(password, user.passwordHash, user.salt);
+    if (!valid) {
+      return jsonResponse(res, 401, { error: 'Invalid email or password.' });
+    }
+
+    const token = generateSession();
+    sessions[token] = { email, createdAt: Date.now(), isAdmin: false };
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Set-Cookie': setCookie(res, 'ghl_session', token, 604800)
+    });
+    res.end(JSON.stringify({ ok: true, name: user.name }));
+    return;
+  }
+
+  // POST /auth/admin — admin login
   if (url === '/auth/admin' && req.method === 'POST') {
     const body = await parseBody(req);
     if (body.secret === ADMIN_SECRET) {
+      const token = generateSession();
+      sessions[token] = { email: 'admin', createdAt: Date.now(), isAdmin: true };
       res.writeHead(200, {
         'Content-Type': 'application/json',
-        'Set-Cookie': 'ghl_admin=' + ADMIN_SECRET + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800'
+        'Set-Cookie': setCookie(res, 'ghl_session', token, 604800)
       });
       res.end(JSON.stringify({ ok: true }));
     } else {
@@ -128,11 +214,14 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // GET /auth/check — check if user is logged in
+  // GET /auth/check
   if (url === '/auth/check') {
+    const s = getSession(req);
+    const userName = s && !s.isAdmin && users[s.email] ? users[s.email].name : '';
     jsonResponse(res, 200, {
-      authenticated: isAuthenticated(req),
-      isAdmin: isAdmin(req),
+      authenticated: !!s,
+      isAdmin: s ? s.isAdmin : false,
+      name: userName,
       hasCredentials: !!(GHL_API_KEY && GHL_LOCATION_ID)
     });
     return;
@@ -141,7 +230,8 @@ const server = http.createServer(async (req, res) => {
   // POST /auth/logout
   if (url === '/auth/logout' && req.method === 'POST') {
     const cookies = parseCookies(req);
-    if (cookies['ghl_session']) delete sessions[cookies['ghl_session']];
+    const token = cookies['ghl_session'];
+    if (token) delete sessions[token];
     res.writeHead(200, {
       'Content-Type': 'application/json',
       'Set-Cookie': 'ghl_session=; Path=/; Max-Age=0'
@@ -150,56 +240,89 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ── Admin endpoints (require admin auth) ──
+  // ════════════════════════════════════════
+  // ADMIN ENDPOINTS
+  // ════════════════════════════════════════
 
-  // GET /admin/invites — list all invite codes
+  // GET /admin/invites
   if (url === '/admin/invites' && req.method === 'GET') {
     if (!isAdmin(req)) return jsonResponse(res, 401, { error: 'Unauthorized' });
     jsonResponse(res, 200, { invites });
     return;
   }
 
-  // POST /admin/invites — create new invite code
+  // POST /admin/invites — create invite (with name for the person)
   if (url === '/admin/invites' && req.method === 'POST') {
     if (!isAdmin(req)) return jsonResponse(res, 401, { error: 'Unauthorized' });
     const body = await parseBody(req);
     const code = generateCode();
     invites[code] = {
+      name: body.name || '',
       createdAt: Date.now(),
-      label: body.label || '',
-      active: true
+      active: true,
+      usedBy: null
     };
     saveInvites();
     jsonResponse(res, 200, { code, invite: invites[code] });
     return;
   }
 
-  // POST /admin/invites/revoke — revoke an invite code
+  // POST /admin/invites/revoke
   if (url === '/admin/invites/revoke' && req.method === 'POST') {
     if (!isAdmin(req)) return jsonResponse(res, 401, { error: 'Unauthorized' });
     const body = await parseBody(req);
     if (invites[body.code]) {
       invites[body.code].active = false;
       saveInvites();
-      // Also kill any sessions using this code
-      Object.keys(sessions).forEach(t => {
-        if (sessions[t].code === body.code) delete sessions[t];
-      });
     }
     jsonResponse(res, 200, { ok: true });
     return;
   }
 
-  // ── GHL API proxy (requires auth) ──
+  // GET /admin/users — list all registered users
+  if (url === '/admin/users' && req.method === 'GET') {
+    if (!isAdmin(req)) return jsonResponse(res, 401, { error: 'Unauthorized' });
+    const safeUsers = {};
+    Object.entries(users).forEach(([email, u]) => {
+      safeUsers[email] = { name: u.name, createdAt: u.createdAt, active: u.active, inviteCode: u.inviteCode };
+    });
+    jsonResponse(res, 200, { users: safeUsers });
+    return;
+  }
+
+  // POST /admin/users/deactivate — disable a user account
+  if (url === '/admin/users/deactivate' && req.method === 'POST') {
+    if (!isAdmin(req)) return jsonResponse(res, 401, { error: 'Unauthorized' });
+    const body = await parseBody(req);
+    if (users[body.email]) {
+      users[body.email].active = false;
+      saveUsers();
+      // Kill their sessions
+      Object.keys(sessions).forEach(t => { if (sessions[t].email === body.email) delete sessions[t]; });
+    }
+    jsonResponse(res, 200, { ok: true });
+    return;
+  }
+
+  // POST /admin/users/activate — re-enable a user account
+  if (url === '/admin/users/activate' && req.method === 'POST') {
+    if (!isAdmin(req)) return jsonResponse(res, 401, { error: 'Unauthorized' });
+    const body = await parseBody(req);
+    if (users[body.email]) { users[body.email].active = true; saveUsers(); }
+    jsonResponse(res, 200, { ok: true });
+    return;
+  }
+
+  // ════════════════════════════════════════
+  // GHL API PROXY
+  // ════════════════════════════════════════
   if (req.url.startsWith('/api/')) {
-    if (!isAuthenticated(req) && !isAdmin(req)) {
+    if (!isAuthenticated(req)) {
       return jsonResponse(res, 401, { error: 'Not authenticated' });
     }
-    // Inject location_id from server config
     let ghlPath = req.url.replace('/api', '');
     if (GHL_LOCATION_ID) {
       const sep = ghlPath.includes('?') ? '&' : '?';
-      // Add both param names GHL uses
       if (!ghlPath.includes('location_id') && !ghlPath.includes('locationId')) {
         ghlPath += sep + 'location_id=' + encodeURIComponent(GHL_LOCATION_ID) + '&locationId=' + encodeURIComponent(GHL_LOCATION_ID);
       }
@@ -217,57 +340,40 @@ const server = http.createServer(async (req, res) => {
     };
 
     const proxyReq = https.request(options, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, {
-        'Content-Type': proxyRes.headers['content-type'] || 'application/json',
-      });
+      res.writeHead(proxyRes.statusCode, { 'Content-Type': proxyRes.headers['content-type'] || 'application/json' });
       proxyRes.pipe(res);
     });
-
     proxyReq.on('error', (e) => {
       res.writeHead(502, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Proxy error: ' + e.message }));
     });
-
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      req.pipe(proxyReq);
-    } else {
-      proxyReq.end();
-    }
+    if (req.method !== 'GET' && req.method !== 'HEAD') { req.pipe(proxyReq); } else { proxyReq.end(); }
     return;
   }
 
-  // ── Serve static files ──
-  // Login page, admin page, and dashboard are all in index.html (SPA)
+  // ════════════════════════════════════════
+  // STATIC FILES
+  // ════════════════════════════════════════
   let filePath = url === '/' || url === '/admin' ? '/index.html' : url;
   filePath = path.join(__dirname, filePath);
-
   const ext = path.extname(filePath);
   const mimeTypes = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json' };
-  const contentType = mimeTypes[ext] || 'text/plain';
-
   fs.readFile(filePath, (err, data) => {
-    if (err) {
-      res.writeHead(404);
-      res.end('Not found');
-      return;
-    }
-    res.writeHead(200, { 'Content-Type': contentType });
+    if (err) { res.writeHead(404); res.end('Not found'); return; }
+    res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'text/plain' });
     res.end(data);
   });
 });
 
 server.listen(PORT, () => {
   console.log('');
-  console.log('  ✅ GHL Sales Dashboard running at:');
-  console.log('');
+  console.log('  GHL Sales Dashboard running at:');
   console.log('     http://localhost:' + PORT);
   console.log('');
   if (!GHL_API_KEY || !GHL_LOCATION_ID) {
-    console.log('  ⚠️  Set GHL_API_KEY and GHL_LOCATION_ID environment variables');
-    console.log('     for server-side API credentials (required for shared access).');
+    console.log('  Set GHL_API_KEY and GHL_LOCATION_ID environment variables.');
     console.log('');
   }
-  console.log('  🔑 Admin secret: ' + ADMIN_SECRET);
-  console.log('     Use this to log into /admin and generate invite codes.');
+  console.log('  Admin secret: ' + ADMIN_SECRET);
   console.log('');
 });
