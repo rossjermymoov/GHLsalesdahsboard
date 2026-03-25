@@ -343,7 +343,7 @@
 
     <!-- Demo Conversion Analysis -->
     <div class="chart-card" style="margin-bottom:24px;">
-      <h3>Demo vs No Demo — Win Rate Comparison</h3>
+      <h3>Demo Completed → Onboarding</h3>
       <div style="display:flex; gap:24px; flex-wrap:wrap;">
         <div style="flex:1; min-width:280px;">
           <canvas id="demoConversionChart"></canvas>
@@ -1345,14 +1345,14 @@ function renderWeekOnWeek(opps, stages) {
     '<div class="kpi-card"><div class="kpi-label">Won Revenue This Week</div><div class="kpi-value">£' + twWonVal.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twWonVal, lwWonVal, '£') + '</div></div>';
 }
 
-// ── Demo Conversion Analysis ──
+// ── Demo → Account Form Conversion Analysis ──
 function renderDemoConversion(opps) {
-  // Detect demo stage — look for stage names containing "demo", "discovery", "presentation", "meeting"
-  var allOpps = allOpportunities; // Use full dataset, not date-filtered
+  var allOpps = allOpportunities;
   var pipeline = allPipelines.find(function(p) { return p.id === currentPipelineId; });
   var stages = pipeline ? (pipeline.stages || []) : [];
-  var demoKeywords = ['demo', 'discovery', 'presentation', 'meeting', 'call', 'consultation'];
 
+  // Detect demo stages
+  var demoKeywords = ['demo', 'discovery', 'presentation', 'meeting', 'call', 'consultation'];
   var demoStageIds = [];
   stages.forEach(function(s) {
     var name = s.name.toLowerCase();
@@ -1361,54 +1361,79 @@ function renderDemoConversion(opps) {
     }
   });
 
-  // Track which contacts have passed through a demo stage
-  // We check: current stage is at or past a demo stage, OR they were in a demo stage
-  var stageOrder = {};
-  stages.forEach(function(s, i) { stageOrder[s.id] = i; });
-
-  var demoMinOrder = 999;
-  demoStageIds.forEach(function(id) { if (stageOrder[id] < demoMinOrder) demoMinOrder = stageOrder[id]; });
-
-  var hadDemo = [], noDemo = [];
-  allOpps.forEach(function(o) {
-    var sid = o.pipelineStageId || o.stageId;
-    var currentOrder = stageOrder[sid] !== undefined ? stageOrder[sid] : -1;
-    // If their current stage is at or past a demo stage, they had a demo
-    if (demoStageIds.length > 0 && currentOrder >= demoMinOrder) {
-      hadDemo.push(o);
-    } else {
-      noDemo.push(o);
+  // Detect onboarding stages (where leads land once account form is signed)
+  var acctKeywords = ['onboarding', 'assigned to onboarding'];
+  var acctStageIds = [];
+  stages.forEach(function(s) {
+    var name = s.name.toLowerCase();
+    for (var i = 0; i < acctKeywords.length; i++) {
+      if (name.indexOf(acctKeywords[i]) >= 0) { acctStageIds.push(s.id); break; }
     }
   });
 
-  var demoWon = hadDemo.filter(function(o) { return o.status === 'won'; });
-  var demoLost = hadDemo.filter(function(o) { return o.status === 'lost'; });
-  var noDemoWon = noDemo.filter(function(o) { return o.status === 'won'; });
-  var noDemoLost = noDemo.filter(function(o) { return o.status === 'lost'; });
+  // Build stage ordering
+  var stageOrder = {};
+  stages.forEach(function(s, i) { stageOrder[s.id] = i; });
 
-  var demoWinRate = (demoWon.length + demoLost.length) > 0
-    ? (demoWon.length / (demoWon.length + demoLost.length) * 100) : 0;
-  var noDemoWinRate = (noDemoWon.length + noDemoLost.length) > 0
-    ? (noDemoWon.length / (noDemoWon.length + noDemoLost.length) * 100) : 0;
+  // Find the max demo stage order (demo completed = past demo stages)
+  var demoMaxOrder = -1;
+  demoStageIds.forEach(function(id) { if (stageOrder[id] > demoMaxOrder) demoMaxOrder = stageOrder[id]; });
 
-  var demoAvgValue = demoWon.length > 0
-    ? demoWon.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0) / demoWon.length : 0;
-  var noDemoAvgValue = noDemoWon.length > 0
-    ? noDemoWon.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0) / noDemoWon.length : 0;
+  // Find the min account form stage order
+  var acctMinOrder = 999;
+  acctStageIds.forEach(function(id) { if (stageOrder[id] < acctMinOrder) acctMinOrder = stageOrder[id]; });
 
-  // Chart
+  // Categorise opportunities:
+  // "Demo Completed" = current stage is PAST the demo stages (order > demoMaxOrder)
+  // "Reached Account Form" = current stage is at or past an account form stage
+  var demoCompleted = [];
+  var noDemoCompleted = [];
+  allOpps.forEach(function(o) {
+    var sid = o.pipelineStageId || o.stageId;
+    var currentOrder = stageOrder[sid] !== undefined ? stageOrder[sid] : -1;
+    if (demoStageIds.length > 0 && currentOrder > demoMaxOrder) {
+      demoCompleted.push(o);
+    } else if (currentOrder <= demoMaxOrder) {
+      noDemoCompleted.push(o);
+    }
+  });
+
+  // Of those who completed demo, how many reached account form?
+  var demoToAcct = demoCompleted.filter(function(o) {
+    var sid = o.pipelineStageId || o.stageId;
+    var ord = stageOrder[sid] !== undefined ? stageOrder[sid] : -1;
+    return acctStageIds.length > 0 && ord >= acctMinOrder;
+  });
+
+  // Of those who did NOT complete demo, how many reached account form?
+  var noDemoToAcct = noDemoCompleted.filter(function(o) {
+    var sid = o.pipelineStageId || o.stageId;
+    var ord = stageOrder[sid] !== undefined ? stageOrder[sid] : -1;
+    return acctStageIds.length > 0 && ord >= acctMinOrder;
+  });
+
+  var demoConvRate = demoCompleted.length > 0
+    ? (demoToAcct.length / demoCompleted.length * 100) : 0;
+  var noDemoConvRate = noDemoCompleted.length > 0
+    ? (noDemoToAcct.length / noDemoCompleted.length * 100) : 0;
+
+  var demoAvgValue = demoToAcct.length > 0
+    ? demoToAcct.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0) / demoToAcct.length : 0;
+  var noDemoAvgValue = noDemoToAcct.length > 0
+    ? noDemoToAcct.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0) / noDemoToAcct.length : 0;
+
+  // Chart — stacked bar: reached account form vs didn't
   if (charts.demoConversion) charts.demoConversion.destroy();
   charts.demoConversion = new Chart(document.getElementById('demoConversionChart'), {
     type: 'bar',
     data: {
-      labels: ['Had Demo', 'No Demo'],
+      labels: ['Demo Completed', 'No Demo'],
       datasets: [
-        { label: 'Won', data: [demoWon.length, noDemoWon.length], backgroundColor: '#22c55ecc', borderRadius: 4, borderSkipped: false },
-        { label: 'Lost', data: [demoLost.length, noDemoLost.length], backgroundColor: '#ef4444cc', borderRadius: 4, borderSkipped: false },
-        { label: 'Open', data: [
-          hadDemo.filter(function(o) { return o.status === 'open'; }).length,
-          noDemo.filter(function(o) { return o.status === 'open'; }).length
-        ], backgroundColor: '#3b82f6cc', borderRadius: 4, borderSkipped: false }
+        { label: 'Reached Onboarding', data: [demoToAcct.length, noDemoToAcct.length], backgroundColor: '#22c55ecc', borderRadius: 4, borderSkipped: false },
+        { label: 'Did Not Reach', data: [
+          demoCompleted.length - demoToAcct.length,
+          noDemoCompleted.length - noDemoToAcct.length
+        ], backgroundColor: '#71717acc', borderRadius: 4, borderSkipped: false }
       ]
     },
     options: {
@@ -1421,23 +1446,27 @@ function renderDemoConversion(opps) {
     }
   });
 
-  // Demo stage names for display
+  // Stage names for display
   var demoStageNames = demoStageIds.map(function(id) {
+    var s = stages.find(function(st) { return st.id === id; });
+    return s ? s.name : id;
+  }).join(', ') || 'None detected';
+  var acctStageNames = acctStageIds.map(function(id) {
     var s = stages.find(function(st) { return st.id === id; });
     return s ? s.name : id;
   }).join(', ') || 'None detected';
 
   // Stats panel
-  var liftPct = noDemoWinRate > 0 ? ((demoWinRate - noDemoWinRate) / noDemoWinRate * 100) : 0;
+  var liftPct = noDemoConvRate > 0 ? ((demoConvRate - noDemoConvRate) / noDemoConvRate * 100) : 0;
   var liftClass = liftPct > 0 ? 'delta-up' : (liftPct < 0 ? 'delta-down' : 'delta-flat');
   var liftStr = liftPct > 0 ? '+' + liftPct.toFixed(0) + '%' : liftPct.toFixed(0) + '%';
 
   document.getElementById('demoStats').innerHTML =
-    '<div class="demo-stat-card"><h4>Demo Win Rate</h4><div class="val" style="color:var(--green)">' + demoWinRate.toFixed(1) + '%</div><div class="sub">' + demoWon.length + ' won / ' + (demoWon.length + demoLost.length) + ' decided</div></div>' +
-    '<div class="demo-stat-card"><h4>No-Demo Win Rate</h4><div class="val" style="color:var(--amber)">' + noDemoWinRate.toFixed(1) + '%</div><div class="sub">' + noDemoWon.length + ' won / ' + (noDemoWon.length + noDemoLost.length) + ' decided</div></div>' +
-    '<div class="demo-stat-card"><h4>Demo Conversion Lift</h4><div class="val ' + liftClass + '">' + liftStr + '</div><div class="sub">How much better demos convert vs no demo</div></div>' +
-    '<div class="demo-stat-card"><h4>Avg Won Deal Value</h4><div class="val">£' + demoAvgValue.toLocaleString(undefined, {maximumFractionDigits:0}) + ' <span style="font-size:14px; color:var(--muted)">demo</span> vs £' + noDemoAvgValue.toLocaleString(undefined, {maximumFractionDigits:0}) + ' <span style="font-size:14px; color:var(--muted)">no demo</span></div></div>' +
-    '<div style="font-size:11px; color:var(--muted); margin-top:8px;">Demo stages detected: ' + esc(demoStageNames) + '</div>';
+    '<div class="demo-stat-card"><h4>Demo → Onboarding Rate</h4><div class="val" style="color:var(--green)">' + demoConvRate.toFixed(1) + '%</div><div class="sub">' + demoToAcct.length + ' of ' + demoCompleted.length + ' who completed demo</div></div>' +
+    '<div class="demo-stat-card"><h4>No-Demo → Onboarding Rate</h4><div class="val" style="color:var(--amber)">' + noDemoConvRate.toFixed(1) + '%</div><div class="sub">' + noDemoToAcct.length + ' of ' + noDemoCompleted.length + ' without demo</div></div>' +
+    '<div class="demo-stat-card"><h4>Demo Conversion Lift</h4><div class="val ' + liftClass + '">' + liftStr + '</div><div class="sub">How much more likely demo-completed leads reach onboarding</div></div>' +
+    '<div class="demo-stat-card"><h4>Avg Deal Value at Onboarding</h4><div class="val">£' + demoAvgValue.toLocaleString(undefined, {maximumFractionDigits:0}) + ' <span style="font-size:14px; color:var(--muted)">demo</span> vs £' + noDemoAvgValue.toLocaleString(undefined, {maximumFractionDigits:0}) + ' <span style="font-size:14px; color:var(--muted)">no demo</span></div></div>' +
+    '<div style="font-size:11px; color:var(--muted); margin-top:8px;">Demo stages: ' + esc(demoStageNames) + ' &nbsp;|&nbsp; Onboarding stages: ' + esc(acctStageNames) + '</div>';
 }
 
 // ── Show admin button if admin, then auto-login check ──
