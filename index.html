@@ -95,6 +95,15 @@
   .status-lost { background: rgba(239,68,68,0.15); color: var(--red); }
   .status-abandoned { background: rgba(113,113,122,0.15); color: var(--muted); }
 
+  /* WoW Deltas */
+  .delta-up { color: var(--green); font-weight: 600; }
+  .delta-down { color: var(--red); font-weight: 600; }
+  .delta-flat { color: var(--muted); font-weight: 600; }
+  .demo-stat-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; margin-bottom: 12px; }
+  .demo-stat-card h4 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .demo-stat-card .val { font-size: 24px; font-weight: 700; }
+  .demo-stat-card .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
   /* Loading */
   .loading-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
   .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
@@ -307,6 +316,30 @@
       <div class="chart-card">
         <h3>Lead Sources</h3>
         <canvas id="sourceChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Week on Week Comparison -->
+    <div class="charts-grid" style="margin-bottom:24px;">
+      <div class="chart-card">
+        <h3>Week on Week — Status Comparison</h3>
+        <canvas id="wowStatusChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Week on Week — Stage Movement</h3>
+        <canvas id="wowStageChart"></canvas>
+      </div>
+    </div>
+    <div class="kpi-row" id="wowKpis" style="margin-bottom:24px;"></div>
+
+    <!-- Demo Conversion Analysis -->
+    <div class="chart-card" style="margin-bottom:24px;">
+      <h3>Demo vs No Demo — Win Rate Comparison</h3>
+      <div style="display:flex; gap:24px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:280px;">
+          <canvas id="demoConversionChart"></canvas>
+        </div>
+        <div id="demoStats" style="flex:1; min-width:280px; display:flex; flex-direction:column; justify-content:center;"></div>
       </div>
     </div>
 
@@ -898,6 +931,12 @@ function renderDashboard() {
     options: { ...chartOpts(), indexAxis: 'y' }
   });
 
+  // ── Week on Week Analysis ──
+  renderWeekOnWeek(opps, stages);
+
+  // ── Demo Conversion Analysis ──
+  renderDemoConversion(opps);
+
   // ── Table ──
   const sorted = [...opps].sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 50);
   const stageIdNameMap = {};
@@ -992,6 +1031,198 @@ function esc(s) {
   var d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+// ── Week on Week ──
+function renderWeekOnWeek(opps, stages) {
+  var now = new Date();
+  var dayOfWeek = now.getDay() || 7; // Mon=1 ... Sun=7
+  var thisWeekStart = new Date(now);
+  thisWeekStart.setDate(now.getDate() - dayOfWeek + 1);
+  thisWeekStart.setHours(0, 0, 0, 0);
+  var lastWeekStart = new Date(thisWeekStart);
+  lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  var lastWeekEnd = new Date(thisWeekStart);
+  lastWeekEnd.setMilliseconds(-1);
+
+  // Use ALL opportunities (not date-filtered) for WoW since we're comparing snapshots
+  var allOpps = allOpportunities;
+
+  // Categorise by created date
+  var thisWeek = allOpps.filter(function(o) { return new Date(o.createdAt) >= thisWeekStart; });
+  var lastWeek = allOpps.filter(function(o) { var d = new Date(o.createdAt); return d >= lastWeekStart && d < thisWeekStart; });
+
+  // Status counts per week
+  var statuses = ['open', 'won', 'lost', 'abandoned'];
+  var twStatus = {}, lwStatus = {};
+  statuses.forEach(function(s) { twStatus[s] = 0; lwStatus[s] = 0; });
+  thisWeek.forEach(function(o) { var s = o.status || 'open'; if (twStatus[s] !== undefined) twStatus[s]++; });
+  lastWeek.forEach(function(o) { var s = o.status || 'open'; if (lwStatus[s] !== undefined) lwStatus[s]++; });
+
+  // WoW Status grouped bar chart
+  if (charts.wowStatus) charts.wowStatus.destroy();
+  charts.wowStatus = new Chart(document.getElementById('wowStatusChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Open', 'Won', 'Lost', 'Abandoned'],
+      datasets: [
+        { label: 'Last Week', data: statuses.map(function(s) { return lwStatus[s]; }), backgroundColor: '#71717acc', borderRadius: 4, borderSkipped: false },
+        { label: 'This Week', data: statuses.map(function(s) { return twStatus[s]; }), backgroundColor: '#6366f1cc', borderRadius: 4, borderSkipped: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { position: 'top', labels: { color: '#e4e4e7', padding: 12, font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#71717a', font: { size: 11 } }, grid: { color: '#2a2d3a' } },
+        y: { ticks: { color: '#71717a', font: { size: 11 } }, grid: { color: '#2a2d3a' } }
+      }
+    }
+  });
+
+  // WoW Stage movement grouped bar
+  var twStages = {}, lwStages = {};
+  stages.forEach(function(s) { twStages[s.id] = 0; lwStages[s.id] = 0; });
+  thisWeek.forEach(function(o) { var sid = o.pipelineStageId || o.stageId; if (twStages[sid] !== undefined) twStages[sid]++; });
+  lastWeek.forEach(function(o) { var sid = o.pipelineStageId || o.stageId; if (lwStages[sid] !== undefined) lwStages[sid]++; });
+
+  if (charts.wowStage) charts.wowStage.destroy();
+  charts.wowStage = new Chart(document.getElementById('wowStageChart'), {
+    type: 'bar',
+    data: {
+      labels: stages.map(function(s) { return s.name; }),
+      datasets: [
+        { label: 'Last Week', data: stages.map(function(s) { return lwStages[s.id]; }), backgroundColor: '#71717acc', borderRadius: 4, borderSkipped: false },
+        { label: 'This Week', data: stages.map(function(s) { return twStages[s.id]; }), backgroundColor: '#6366f1cc', borderRadius: 4, borderSkipped: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { position: 'top', labels: { color: '#e4e4e7', padding: 12, font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#71717a', font: { size: 11 } }, grid: { color: '#2a2d3a' } },
+        y: { ticks: { color: '#71717a', font: { size: 11 } }, grid: { color: '#2a2d3a' } }
+      }
+    }
+  });
+
+  // WoW KPI cards with deltas
+  var twTotal = thisWeek.length, lwTotal = lastWeek.length;
+  var twWon = twStatus.won, lwWon = lwStatus.won;
+  var twValue = thisWeek.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
+  var lwValue = lastWeek.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
+  var twWonVal = thisWeek.filter(function(o) { return o.status === 'won'; }).reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
+  var lwWonVal = lastWeek.filter(function(o) { return o.status === 'won'; }).reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
+
+  function deltaHTML(current, previous, prefix) {
+    prefix = prefix || '';
+    var diff = current - previous;
+    if (diff === 0) return '<span class="delta-flat">— no change</span>';
+    var arrow = diff > 0 ? '&#9650;' : '&#9660;';
+    var cls = diff > 0 ? 'delta-up' : 'delta-down';
+    return '<span class="' + cls + '">' + arrow + ' ' + prefix + Math.abs(diff).toLocaleString() + ' vs last week</span>';
+  }
+
+  document.getElementById('wowKpis').innerHTML =
+    '<div class="kpi-card"><div class="kpi-label">New Opps This Week</div><div class="kpi-value">' + twTotal + '</div><div class="kpi-sub">' + deltaHTML(twTotal, lwTotal) + '</div></div>' +
+    '<div class="kpi-card"><div class="kpi-label">Wins This Week</div><div class="kpi-value">' + twWon + '</div><div class="kpi-sub">' + deltaHTML(twWon, lwWon) + '</div></div>' +
+    '<div class="kpi-card"><div class="kpi-label">Pipeline Value This Week</div><div class="kpi-value">£' + twValue.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twValue, lwValue, '£') + '</div></div>' +
+    '<div class="kpi-card"><div class="kpi-label">Won Revenue This Week</div><div class="kpi-value">£' + twWonVal.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twWonVal, lwWonVal, '£') + '</div></div>';
+}
+
+// ── Demo Conversion Analysis ──
+function renderDemoConversion(opps) {
+  // Detect demo stage — look for stage names containing "demo", "discovery", "presentation", "meeting"
+  var allOpps = allOpportunities; // Use full dataset, not date-filtered
+  var pipeline = allPipelines.find(function(p) { return p.id === currentPipelineId; });
+  var stages = pipeline ? (pipeline.stages || []) : [];
+  var demoKeywords = ['demo', 'discovery', 'presentation', 'meeting', 'call', 'consultation'];
+
+  var demoStageIds = [];
+  stages.forEach(function(s) {
+    var name = s.name.toLowerCase();
+    for (var i = 0; i < demoKeywords.length; i++) {
+      if (name.indexOf(demoKeywords[i]) >= 0) { demoStageIds.push(s.id); break; }
+    }
+  });
+
+  // Track which contacts have passed through a demo stage
+  // We check: current stage is at or past a demo stage, OR they were in a demo stage
+  var stageOrder = {};
+  stages.forEach(function(s, i) { stageOrder[s.id] = i; });
+
+  var demoMinOrder = 999;
+  demoStageIds.forEach(function(id) { if (stageOrder[id] < demoMinOrder) demoMinOrder = stageOrder[id]; });
+
+  var hadDemo = [], noDemo = [];
+  allOpps.forEach(function(o) {
+    var sid = o.pipelineStageId || o.stageId;
+    var currentOrder = stageOrder[sid] !== undefined ? stageOrder[sid] : -1;
+    // If their current stage is at or past a demo stage, they had a demo
+    if (demoStageIds.length > 0 && currentOrder >= demoMinOrder) {
+      hadDemo.push(o);
+    } else {
+      noDemo.push(o);
+    }
+  });
+
+  var demoWon = hadDemo.filter(function(o) { return o.status === 'won'; });
+  var demoLost = hadDemo.filter(function(o) { return o.status === 'lost'; });
+  var noDemoWon = noDemo.filter(function(o) { return o.status === 'won'; });
+  var noDemoLost = noDemo.filter(function(o) { return o.status === 'lost'; });
+
+  var demoWinRate = (demoWon.length + demoLost.length) > 0
+    ? (demoWon.length / (demoWon.length + demoLost.length) * 100) : 0;
+  var noDemoWinRate = (noDemoWon.length + noDemoLost.length) > 0
+    ? (noDemoWon.length / (noDemoWon.length + noDemoLost.length) * 100) : 0;
+
+  var demoAvgValue = demoWon.length > 0
+    ? demoWon.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0) / demoWon.length : 0;
+  var noDemoAvgValue = noDemoWon.length > 0
+    ? noDemoWon.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0) / noDemoWon.length : 0;
+
+  // Chart
+  if (charts.demoConversion) charts.demoConversion.destroy();
+  charts.demoConversion = new Chart(document.getElementById('demoConversionChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Had Demo', 'No Demo'],
+      datasets: [
+        { label: 'Won', data: [demoWon.length, noDemoWon.length], backgroundColor: '#22c55ecc', borderRadius: 4, borderSkipped: false },
+        { label: 'Lost', data: [demoLost.length, noDemoLost.length], backgroundColor: '#ef4444cc', borderRadius: 4, borderSkipped: false },
+        { label: 'Open', data: [
+          hadDemo.filter(function(o) { return o.status === 'open'; }).length,
+          noDemo.filter(function(o) { return o.status === 'open'; }).length
+        ], backgroundColor: '#3b82f6cc', borderRadius: 4, borderSkipped: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { position: 'top', labels: { color: '#e4e4e7', padding: 12, font: { size: 11 } } } },
+      scales: {
+        x: { stacked: true, ticks: { color: '#71717a', font: { size: 11 } }, grid: { color: '#2a2d3a' } },
+        y: { stacked: true, ticks: { color: '#71717a', font: { size: 11 } }, grid: { color: '#2a2d3a' } }
+      }
+    }
+  });
+
+  // Demo stage names for display
+  var demoStageNames = demoStageIds.map(function(id) {
+    var s = stages.find(function(st) { return st.id === id; });
+    return s ? s.name : id;
+  }).join(', ') || 'None detected';
+
+  // Stats panel
+  var liftPct = noDemoWinRate > 0 ? ((demoWinRate - noDemoWinRate) / noDemoWinRate * 100) : 0;
+  var liftClass = liftPct > 0 ? 'delta-up' : (liftPct < 0 ? 'delta-down' : 'delta-flat');
+  var liftStr = liftPct > 0 ? '+' + liftPct.toFixed(0) + '%' : liftPct.toFixed(0) + '%';
+
+  document.getElementById('demoStats').innerHTML =
+    '<div class="demo-stat-card"><h4>Demo Win Rate</h4><div class="val" style="color:var(--green)">' + demoWinRate.toFixed(1) + '%</div><div class="sub">' + demoWon.length + ' won / ' + (demoWon.length + demoLost.length) + ' decided</div></div>' +
+    '<div class="demo-stat-card"><h4>No-Demo Win Rate</h4><div class="val" style="color:var(--amber)">' + noDemoWinRate.toFixed(1) + '%</div><div class="sub">' + noDemoWon.length + ' won / ' + (noDemoWon.length + noDemoLost.length) + ' decided</div></div>' +
+    '<div class="demo-stat-card"><h4>Demo Conversion Lift</h4><div class="val ' + liftClass + '">' + liftStr + '</div><div class="sub">How much better demos convert vs no demo</div></div>' +
+    '<div class="demo-stat-card"><h4>Avg Won Deal Value</h4><div class="val">£' + demoAvgValue.toLocaleString(undefined, {maximumFractionDigits:0}) + ' <span style="font-size:14px; color:var(--muted)">demo</span> vs £' + noDemoAvgValue.toLocaleString(undefined, {maximumFractionDigits:0}) + ' <span style="font-size:14px; color:var(--muted)">no demo</span></div></div>' +
+    '<div style="font-size:11px; color:var(--muted); margin-top:8px;">Demo stages detected: ' + esc(demoStageNames) + '</div>';
 }
 
 // ── Show admin button if admin, then auto-login check ──
