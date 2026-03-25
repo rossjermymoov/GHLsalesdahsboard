@@ -366,6 +366,7 @@
           <thead>
             <tr>
               <th>Contact</th>
+              <th>Owner</th>
               <th>Stage</th>
               <th>Status</th>
               <th>Value</th>
@@ -1033,8 +1034,10 @@ function renderDashboard() {
     const sourceColor = getSourceColor(source);
     const created = o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—';
     const updated = o.updatedAt ? new Date(o.updatedAt).toLocaleDateString() : '—';
+    const owner = getDealOwner(o);
     return '<tr>'
       + '<td>' + esc(contactName) + '</td>'
+      + '<td>' + esc(owner) + '</td>'
       + '<td>' + esc(stageName) + '</td>'
       + '<td><span class="status-pill ' + statusClass + '">' + status + '</span></td>'
       + '<td>' + value + '</td>'
