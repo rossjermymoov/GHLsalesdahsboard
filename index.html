@@ -601,7 +601,6 @@ async function fetchAllOpportunities(pipelineId) {
   while (hasMore && page <= 20) {
     try {
       var data = await ghlGet('/opportunities/search', {
-        location_id: '',
         pipeline_id: pipelineId,
         limit: '100',
         page: String(page)

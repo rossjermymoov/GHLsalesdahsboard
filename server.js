@@ -323,8 +323,9 @@ const server = http.createServer(async (req, res) => {
     let ghlPath = req.url.replace('/api', '');
     if (GHL_LOCATION_ID) {
       const sep = ghlPath.includes('?') ? '&' : '?';
-      if (!ghlPath.includes('location_id') && !ghlPath.includes('locationId')) {
-        ghlPath += sep + 'location_id=' + encodeURIComponent(GHL_LOCATION_ID) + '&locationId=' + encodeURIComponent(GHL_LOCATION_ID);
+      // Only add locationId (camelCase) — GHL v2 rejects snake_case location_id on many endpoints
+      if (!ghlPath.includes('locationId')) {
+        ghlPath += sep + 'locationId=' + encodeURIComponent(GHL_LOCATION_ID);
       }
     }
     const options = {
