@@ -1112,6 +1112,16 @@ function formatMonth(ym) {
   return months[parseInt(m)-1] + ' ' + y;
 }
 
+// ── Deal Owner Helper (global) ──
+function getDealOwner(o) {
+  if (o.assignedToUser && o.assignedToUser.name) return o.assignedToUser.name;
+  if (o.assignedToUser && o.assignedToUser.email) return o.assignedToUser.email;
+  if (o.assignedTo) return resolveUserId(o.assignedTo) || o.assignedTo;
+  if (o.contact && o.contact.assignedTo) return resolveUserId(o.contact.assignedTo) || o.contact.assignedTo;
+  if (o.assignedUser) return resolveUserId(o.assignedUser) || o.assignedUser;
+  return '—';
+}
+
 // ── Stale Deals ──
 function renderStaleDeals(stages) {
   var STALE_DAYS = 7;
@@ -1153,17 +1163,6 @@ function renderStaleDeals(stages) {
       var days = Math.floor((now - stageDate) / (1000 * 60 * 60 * 24));
       return { opp: o, days: days };
     }).sort(function(a, b) { return b.days - a.days; });
-  }
-
-  function getDealOwner(o) {
-    // Check for nested user object with name first
-    if (o.assignedToUser && o.assignedToUser.name) return o.assignedToUser.name;
-    if (o.assignedToUser && o.assignedToUser.email) return o.assignedToUser.email;
-    // Resolve IDs via the user map
-    if (o.assignedTo) return resolveUserId(o.assignedTo) || o.assignedTo;
-    if (o.contact && o.contact.assignedTo) return resolveUserId(o.contact.assignedTo) || o.contact.assignedTo;
-    if (o.assignedUser) return resolveUserId(o.assignedUser) || o.assignedUser;
-    return '—';
   }
 
   function buildStaleTable(staleOpps, title, accentColor, group) {
