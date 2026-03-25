@@ -95,6 +95,9 @@
   .status-lost { background: rgba(239,68,68,0.15); color: var(--red); }
   .status-abandoned { background: rgba(113,113,122,0.15); color: var(--muted); }
 
+  /* Source Tags */
+  .source-tag { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; }
+
   /* WoW Deltas */
   .delta-up { color: var(--green); font-weight: 600; }
   .delta-down { color: var(--red); font-weight: 600; }
@@ -767,6 +770,10 @@ function getFilteredOpps() {
 
 // ── Render Dashboard ──
 function renderDashboard() {
+  // Reset source colours so they stay consistent across re-renders
+  SOURCE_COLOR_CACHE = {};
+  SOURCE_COLOR_INDEX = 0;
+
   const opps = getFilteredOpps();
   const pipeline = allPipelines.find(p => p.id === currentPipelineId);
   const stages = pipeline ? (pipeline.stages || []) : [];
@@ -945,21 +952,22 @@ function renderDashboard() {
   document.getElementById('oppsBody').innerHTML = sorted.map(o => {
     const stageName = stageIdNameMap[o.pipelineStageId || o.stageId] || o.pipelineStageId || '—';
     const status = o.status || 'open';
-    const statusClass = `status-${status}`;
+    const statusClass = 'status-' + status;
     const contactName = o.contact ? (o.contact.name || o.contact.email || o.contact.phone || '—') : (o.name || '—');
     const value = o.monetaryValue ? '£' + o.monetaryValue.toLocaleString() : '—';
     const source = o.source || o.leadSource || '—';
+    const sourceColor = getSourceColor(source);
     const created = o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—';
     const updated = o.updatedAt ? new Date(o.updatedAt).toLocaleDateString() : '—';
-    return `<tr>
-      <td>${esc(contactName)}</td>
-      <td>${esc(stageName)}</td>
-      <td><span class="status-pill ${statusClass}">${status}</span></td>
-      <td>${value}</td>
-      <td>${esc(source)}</td>
-      <td>${created}</td>
-      <td>${updated}</td>
-    </tr>`;
+    return '<tr>'
+      + '<td>' + esc(contactName) + '</td>'
+      + '<td>' + esc(stageName) + '</td>'
+      + '<td><span class="status-pill ' + statusClass + '">' + status + '</span></td>'
+      + '<td>' + value + '</td>'
+      + '<td><span class="source-tag" style="background:' + sourceColor.bg + '; color:' + sourceColor.text + '; border:1px solid ' + sourceColor.border + '">' + esc(source) + '</span></td>'
+      + '<td>' + created + '</td>'
+      + '<td>' + updated + '</td>'
+      + '</tr>';
   }).join('');
 }
 
@@ -1025,6 +1033,34 @@ function formatMonth(ym) {
   const [y, m] = ym.split('-');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return months[parseInt(m)-1] + ' ' + y;
+}
+
+// Source color mapping — consistent colors per source, vibrant and easy to scan
+var SOURCE_COLOR_CACHE = {};
+var SOURCE_PALETTE = [
+  { bg: 'rgba(99,102,241,0.18)',  text: '#818cf8', border: 'rgba(99,102,241,0.4)' },   // indigo
+  { bg: 'rgba(6,182,212,0.18)',   text: '#22d3ee', border: 'rgba(6,182,212,0.4)' },     // cyan
+  { bg: 'rgba(244,63,94,0.18)',   text: '#fb7185', border: 'rgba(244,63,94,0.4)' },     // rose
+  { bg: 'rgba(34,197,94,0.18)',   text: '#4ade80', border: 'rgba(34,197,94,0.4)' },     // green
+  { bg: 'rgba(245,158,11,0.18)',  text: '#fbbf24', border: 'rgba(245,158,11,0.4)' },    // amber
+  { bg: 'rgba(168,85,247,0.18)',  text: '#c084fc', border: 'rgba(168,85,247,0.4)' },    // purple
+  { bg: 'rgba(249,115,22,0.18)',  text: '#fb923c', border: 'rgba(249,115,22,0.4)' },    // orange
+  { bg: 'rgba(236,72,153,0.18)',  text: '#f472b6', border: 'rgba(236,72,153,0.4)' },    // pink
+  { bg: 'rgba(20,184,166,0.18)',  text: '#2dd4bf', border: 'rgba(20,184,166,0.4)' },    // teal
+  { bg: 'rgba(59,130,246,0.18)',  text: '#60a5fa', border: 'rgba(59,130,246,0.4)' },    // blue
+  { bg: 'rgba(234,179,8,0.18)',   text: '#facc15', border: 'rgba(234,179,8,0.4)' },     // yellow
+  { bg: 'rgba(239,68,68,0.18)',   text: '#f87171', border: 'rgba(239,68,68,0.4)' },     // red
+];
+var SOURCE_COLOR_INDEX = 0;
+
+function getSourceColor(source) {
+  if (!source || source === '—') return { bg: 'rgba(113,113,122,0.15)', text: '#a1a1aa', border: 'rgba(113,113,122,0.3)' };
+  var key = source.toLowerCase().trim();
+  if (SOURCE_COLOR_CACHE[key]) return SOURCE_COLOR_CACHE[key];
+  var color = SOURCE_PALETTE[SOURCE_COLOR_INDEX % SOURCE_PALETTE.length];
+  SOURCE_COLOR_INDEX++;
+  SOURCE_COLOR_CACHE[key] = color;
+  return color;
 }
 
 function esc(s) {
