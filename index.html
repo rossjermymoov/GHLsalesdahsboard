@@ -352,6 +352,10 @@
       </div>
     </div>
 
+    <!-- Stale Deals Alert -->
+    <div id="staleDealsSectionQuote" class="table-card" style="margin-bottom:16px; border-left: 3px solid var(--amber);"></div>
+    <div id="staleDealsSectionDemo" class="table-card" style="margin-bottom:24px; border-left: 3px solid var(--red);"></div>
+
     <!-- Recent Opportunities Table -->
     <div class="table-card">
       <h3>Recent Opportunities</h3>
@@ -984,6 +988,9 @@ function renderDashboard() {
   // ── Demo Conversion Analysis ──
   renderDemoConversion(opps);
 
+  // ── Stale Deals ──
+  renderStaleDeals(stages);
+
   // ── Table ──
   const sorted = [...opps].sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 50);
   const stageIdNameMap = {};
@@ -1073,6 +1080,92 @@ function formatMonth(ym) {
   const [y, m] = ym.split('-');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return months[parseInt(m)-1] + ' ' + y;
+}
+
+// ── Stale Deals ──
+function renderStaleDeals(stages) {
+  var STALE_DAYS = 7;
+  var now = Date.now();
+  var allOpps = allOpportunities;
+
+  // Find quote and demo stages by keyword matching
+  var quoteKeywords = ['quote', 'proposal', 'pricing', 'estimate'];
+  var demoKeywords = ['demo', 'discovery', 'presentation', 'meeting', 'call', 'consultation'];
+
+  var quoteStageIds = [], demoStageIds = [];
+  var stageNameMap = {};
+  stages.forEach(function(s) {
+    stageNameMap[s.id] = s.name;
+    var name = s.name.toLowerCase();
+    for (var i = 0; i < quoteKeywords.length; i++) {
+      if (name.indexOf(quoteKeywords[i]) >= 0) { quoteStageIds.push(s.id); break; }
+    }
+    for (var i = 0; i < demoKeywords.length; i++) {
+      if (name.indexOf(demoKeywords[i]) >= 0) { demoStageIds.push(s.id); break; }
+    }
+  });
+
+  function getStaleOpps(stageIds) {
+    return allOpps.filter(function(o) {
+      if (o.status !== 'open') return false;
+      var sid = o.pipelineStageId || o.stageId;
+      if (stageIds.indexOf(sid) < 0) return false;
+      var stageDate = new Date(o.lastStageChangeAt || o.updatedAt || o.createdAt || now);
+      var days = Math.floor((now - stageDate) / (1000 * 60 * 60 * 24));
+      return days >= STALE_DAYS;
+    }).map(function(o) {
+      var stageDate = new Date(o.lastStageChangeAt || o.updatedAt || o.createdAt || now);
+      var days = Math.floor((now - stageDate) / (1000 * 60 * 60 * 24));
+      return { opp: o, days: days };
+    }).sort(function(a, b) { return b.days - a.days; });
+  }
+
+  function buildStaleTable(staleOpps, title, accentColor, stageIds) {
+    if (stageIds.length === 0) {
+      return '<h3 style="padding:20px 24px; margin:0;">' + title + '</h3>'
+        + '<div style="padding:0 24px 20px; color:var(--muted); font-size:13px;">No matching stages found in this pipeline. Looking for stages containing: '
+        + (title.indexOf('Quote') >= 0 ? quoteKeywords.join(', ') : demoKeywords.join(', ')) + '</div>';
+    }
+    var matchedNames = stageIds.map(function(id) { return stageNameMap[id] || id; }).join(', ');
+    var countBadge = '<span style="background:' + accentColor + '; color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; margin-left:8px;">' + staleOpps.length + '</span>';
+    var html = '<h3 style="padding:20px 24px; margin:0;">' + title + countBadge + '<span style="font-size:11px; color:var(--muted); font-weight:400; margin-left:12px;">Stage: ' + esc(matchedNames) + '</span></h3>';
+
+    if (staleOpps.length === 0) {
+      html += '<div style="padding:0 24px 20px; color:var(--green); font-size:13px; font-weight:500;">All clear — no one stuck here over ' + STALE_DAYS + ' days.</div>';
+      return html;
+    }
+
+    html += '<div style="overflow-x:auto"><table><thead><tr>'
+      + '<th>Contact</th><th>Value</th><th>Source</th><th style="color:' + accentColor + '">Days in Stage</th><th>Created</th></tr></thead><tbody>';
+
+    staleOpps.forEach(function(item) {
+      var o = item.opp;
+      var contactName = o.contact ? (o.contact.name || o.contact.email || o.contact.phone || '—') : (o.name || '—');
+      var value = o.monetaryValue ? '£' + o.monetaryValue.toLocaleString() : '—';
+      var source = o.source || o.leadSource || '—';
+      var sourceColor = getSourceColor(source);
+      var created = o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—';
+      var daysColor = item.days >= 14 ? 'var(--red)' : 'var(--amber)';
+      var daysIcon = item.days >= 14 ? '&#9888;' : '&#9201;';
+
+      html += '<tr>'
+        + '<td style="font-weight:600;">' + esc(contactName) + '</td>'
+        + '<td>' + value + '</td>'
+        + '<td><span class="source-tag" style="background:' + sourceColor.bg + '; color:' + sourceColor.text + '; border:1px solid ' + sourceColor.border + '">' + esc(source) + '</span></td>'
+        + '<td style="font-weight:700; color:' + daysColor + '; font-size:14px;">' + daysIcon + ' ' + item.days + ' days</td>'
+        + '<td>' + created + '</td>'
+        + '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  var staleQuotes = getStaleOpps(quoteStageIds);
+  var staleDemos = getStaleOpps(demoStageIds);
+
+  document.getElementById('staleDealsSectionQuote').innerHTML = buildStaleTable(staleQuotes, 'Stuck in Quote Stage (7+ days)', 'var(--amber)', quoteStageIds);
+  document.getElementById('staleDealsSectionDemo').innerHTML = buildStaleTable(staleDemos, 'Stuck in Demo Stage (7+ days)', 'var(--red)', demoStageIds);
 }
 
 // Source color mapping — consistent colors per source, vibrant and easy to scan
