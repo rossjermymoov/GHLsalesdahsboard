@@ -12,8 +12,12 @@ const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-' + crypto.randomByt
 const GHL_BASE = 'services.leadconnectorhq.com';
 
 // ── Data stores (persisted to JSON) ──
-const INVITES_FILE = path.join(__dirname, 'invites.json');
-const USERS_FILE = path.join(__dirname, 'users.json');
+// DATA_DIR should point to a persistent volume on Railway (e.g. /data)
+// Falls back to app directory for local development
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+if (!fs.existsSync(DATA_DIR)) { fs.mkdirSync(DATA_DIR, { recursive: true }); }
+const INVITES_FILE = path.join(DATA_DIR, 'invites.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 let invites = {};   // { code: { name, createdAt, active, usedBy } }
 let users = {};      // { email: { name, passwordHash, salt, inviteCode, createdAt, active } }
