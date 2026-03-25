@@ -323,9 +323,19 @@ const server = http.createServer(async (req, res) => {
     let ghlPath = req.url.replace('/api', '');
     if (GHL_LOCATION_ID) {
       const sep = ghlPath.includes('?') ? '&' : '?';
-      // Only add locationId (camelCase) — GHL v2 rejects snake_case location_id on many endpoints
-      if (!ghlPath.includes('locationId')) {
-        ghlPath += sep + 'locationId=' + encodeURIComponent(GHL_LOCATION_ID);
+      // GHL API is inconsistent: /opportunities/search uses location_id (snake_case)
+      // while /opportunities/pipelines uses locationId (camelCase)
+      const pathOnly = ghlPath.split('?')[0];
+      if (pathOnly.includes('/search')) {
+        // Search endpoints use snake_case
+        if (!ghlPath.includes('location_id')) {
+          ghlPath += sep + 'location_id=' + encodeURIComponent(GHL_LOCATION_ID);
+        }
+      } else {
+        // Other endpoints use camelCase
+        if (!ghlPath.includes('locationId')) {
+          ghlPath += sep + 'locationId=' + encodeURIComponent(GHL_LOCATION_ID);
+        }
       }
     }
     const options = {
