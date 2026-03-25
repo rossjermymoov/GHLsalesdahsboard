@@ -102,10 +102,6 @@
   .delta-up { color: var(--green); font-weight: 600; }
   .delta-down { color: var(--red); font-weight: 600; }
   .delta-flat { color: var(--muted); font-weight: 600; }
-  .demo-stat-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; margin-bottom: 12px; }
-  .demo-stat-card h4 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-  .demo-stat-card .val { font-size: 24px; font-weight: 700; }
-  .demo-stat-card .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
   /* Loading */
   .loading-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
@@ -340,17 +336,6 @@
       </div>
     </div>
     <div class="kpi-row" id="wowKpis" style="margin-bottom:24px;"></div>
-
-    <!-- Demo Conversion Analysis -->
-    <div class="chart-card" style="margin-bottom:24px;">
-      <h3>Demo Completed — Impact on Onboarding</h3>
-      <div style="display:flex; gap:24px; flex-wrap:wrap;">
-        <div style="flex:1; min-width:280px;">
-          <canvas id="demoConversionChart"></canvas>
-        </div>
-        <div id="demoStats" style="flex:1; min-width:280px; display:flex; flex-direction:column; justify-content:center;"></div>
-      </div>
-    </div>
 
     <!-- Stale Deals Alerts -->
     <div id="staleDealsSectionQuote" class="table-card" style="margin-bottom:16px; border-left: 3px solid var(--amber);"></div>
@@ -1013,9 +998,6 @@ function renderDashboard() {
   // ── Week on Week Analysis ──
   renderWeekOnWeek(opps, stages);
 
-  // ── Demo Conversion Analysis ──
-  renderDemoConversion(opps);
-
   // ── Stale Deals ──
   renderStaleDeals(stages);
 
@@ -1343,147 +1325,6 @@ function renderWeekOnWeek(opps, stages) {
     '<div class="kpi-card"><div class="kpi-label">Wins This Week</div><div class="kpi-value">' + twWon + '</div><div class="kpi-sub">' + deltaHTML(twWon, lwWon) + '</div></div>' +
     '<div class="kpi-card"><div class="kpi-label">Pipeline Value This Week</div><div class="kpi-value">£' + twValue.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twValue, lwValue, '£') + '</div></div>' +
     '<div class="kpi-card"><div class="kpi-label">Won Revenue This Week</div><div class="kpi-value">£' + twWonVal.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twWonVal, lwWonVal, '£') + '</div></div>';
-}
-
-// ── Demo Impact Analysis ──
-function renderDemoConversion(opps) {
-  var allOpps = allOpportunities;
-  var pipeline = allPipelines.find(function(p) { return p.id === currentPipelineId; });
-  var stages = pipeline ? (pipeline.stages || []) : [];
-
-  // Detect "demo completed" stages only — exclude "demo booked"
-  var demoCompletedKeywords = ['demo completed', 'demo complete', 'demo done'];
-  var demoBookedKeywords = ['demo booked', 'demo scheduled', 'demo requested'];
-  var demoStageIds = [];
-  stages.forEach(function(s) {
-    var name = s.name.toLowerCase();
-    // First try exact "demo completed" match
-    for (var i = 0; i < demoCompletedKeywords.length; i++) {
-      if (name.indexOf(demoCompletedKeywords[i]) >= 0) { demoStageIds.push(s.id); return; }
-    }
-    // If no "completed" stage found yet, skip anything that looks like "booked"
-    for (var j = 0; j < demoBookedKeywords.length; j++) {
-      if (name.indexOf(demoBookedKeywords[j]) >= 0) return;
-    }
-    // Fallback: if the stage just says "demo" without booked/completed qualifier, include it
-    if (name.indexOf('demo') >= 0) { demoStageIds.push(s.id); }
-  });
-
-  // Detect onboarding stages
-  var onbKeywords = ['onboarding', 'assigned to onboarding'];
-  var onbStageIds = [];
-  stages.forEach(function(s) {
-    var name = s.name.toLowerCase();
-    for (var i = 0; i < onbKeywords.length; i++) {
-      if (name.indexOf(onbKeywords[i]) >= 0) { onbStageIds.push(s.id); break; }
-    }
-  });
-
-  // Build stage ordering
-  var stageOrder = {};
-  stages.forEach(function(s, i) { stageOrder[s.id] = i; });
-
-  var demoMaxOrder = -1;
-  demoStageIds.forEach(function(id) { if (stageOrder[id] > demoMaxOrder) demoMaxOrder = stageOrder[id]; });
-
-  // Find all deals currently in onboarding (or past it)
-  var onbMinOrder = 999;
-  onbStageIds.forEach(function(id) { if (stageOrder[id] < onbMinOrder) onbMinOrder = stageOrder[id]; });
-
-  // Split onboarding deals into "had demo" vs "no demo"
-  // "Had demo" = current stage is past the demo stages (order > demoMaxOrder)
-  // AND currently at or past onboarding
-  var onbWithDemo = [];
-  var onbWithoutDemo = [];
-  var allOnboarded = [];
-
-  allOpps.forEach(function(o) {
-    var sid = o.pipelineStageId || o.stageId;
-    var ord = stageOrder[sid] !== undefined ? stageOrder[sid] : -1;
-    // Is this deal at or past onboarding?
-    if (onbStageIds.length > 0 && ord >= onbMinOrder) {
-      allOnboarded.push(o);
-      // Did it pass through demo stages?
-      if (demoStageIds.length > 0 && ord > demoMaxOrder) {
-        onbWithDemo.push(o);
-      } else {
-        onbWithoutDemo.push(o);
-      }
-    }
-  });
-
-  // Average days from lead creation to reaching onboarding (lastStageChangeAt)
-  function avgDaysToOnboarding(arr) {
-    if (arr.length === 0) return 0;
-    var total = arr.reduce(function(sum, o) {
-      var created = new Date(o.createdAt || Date.now());
-      var reached = new Date(o.lastStageChangeAt || o.updatedAt || o.createdAt || Date.now());
-      return sum + Math.max(0, (reached - created) / (1000 * 60 * 60 * 24));
-    }, 0);
-    return total / arr.length;
-  }
-
-  var demoAvgDays = avgDaysToOnboarding(onbWithDemo);
-  var noDemoAvgDays = avgDaysToOnboarding(onbWithoutDemo);
-
-  // Avg deal value at onboarding
-  var demoAvgValue = onbWithDemo.length > 0
-    ? onbWithDemo.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0) / onbWithDemo.length : 0;
-  var noDemoAvgValue = onbWithoutDemo.length > 0
-    ? onbWithoutDemo.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0) / onbWithoutDemo.length : 0;
-
-  // Deals that had a demo but were closed lost
-  var allPastDemo = allOpps.filter(function(o) {
-    var sid = o.pipelineStageId || o.stageId;
-    var ord = stageOrder[sid] !== undefined ? stageOrder[sid] : -1;
-    return demoStageIds.length > 0 && ord > demoMaxOrder;
-  });
-  var demoClosedLost = allPastDemo.filter(function(o) { return o.status === 'lost'; });
-  var demoLostRate = allPastDemo.length > 0 ? (demoClosedLost.length / allPastDemo.length * 100) : 0;
-
-  // Chart — side by side: onboarding with demo vs without
-  if (charts.demoConversion) charts.demoConversion.destroy();
-  charts.demoConversion = new Chart(document.getElementById('demoConversionChart'), {
-    type: 'bar',
-    data: {
-      labels: ['Deals in Onboarding', 'Avg Days Lead → Onboarding'],
-      datasets: [
-        { label: 'Demo Completed', data: [onbWithDemo.length, Math.round(demoAvgDays)], backgroundColor: '#6366f1cc', borderRadius: 4, borderSkipped: false },
-        { label: 'No Demo', data: [onbWithoutDemo.length, Math.round(noDemoAvgDays)], backgroundColor: '#71717acc', borderRadius: 4, borderSkipped: false }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: true,
-      plugins: { legend: { position: 'top', labels: { color: '#e4e4e7', padding: 12, font: { size: 11 } } } },
-      scales: {
-        x: { ticks: { color: '#71717a', font: { size: 11 } }, grid: { color: '#2a2d3a' } },
-        y: { ticks: { color: '#71717a', font: { size: 11 } }, grid: { color: '#2a2d3a' } }
-      }
-    }
-  });
-
-  // Stage names for display
-  var demoStageNames = demoStageIds.map(function(id) {
-    var s = stages.find(function(st) { return st.id === id; });
-    return s ? s.name : id;
-  }).join(', ') || 'None detected';
-  var onbStageNames = onbStageIds.map(function(id) {
-    var s = stages.find(function(st) { return st.id === id; });
-    return s ? s.name : id;
-  }).join(', ') || 'None detected';
-
-  // Speed difference
-  var speedDiff = noDemoAvgDays - demoAvgDays;
-  var speedClass = speedDiff > 0 ? 'delta-up' : (speedDiff < 0 ? 'delta-down' : 'delta-flat');
-  var speedStr = speedDiff > 0 ? Math.round(speedDiff) + ' days faster with demo' : (speedDiff < 0 ? Math.round(-speedDiff) + ' days slower with demo' : 'Same speed');
-
-  document.getElementById('demoStats').innerHTML =
-    '<div class="demo-stat-card"><h4>Onboarded (Demo Completed)</h4><div class="val" style="color:var(--accent)">' + onbWithDemo.length + ' deals</div><div class="sub">Avg ' + Math.round(demoAvgDays) + ' days lead → onboarding</div></div>' +
-    '<div class="demo-stat-card"><h4>Onboarded (No Demo)</h4><div class="val" style="color:var(--muted)">' + onbWithoutDemo.length + ' deals</div><div class="sub">Avg ' + Math.round(noDemoAvgDays) + ' days lead → onboarding</div></div>' +
-    '<div class="demo-stat-card"><h4>Speed Difference</h4><div class="val ' + speedClass + '">' + speedStr + '</div><div class="sub">' + allOnboarded.length + ' total onboarded deals</div></div>' +
-    '<div class="demo-stat-card"><h4>Avg Deal Value</h4><div class="val">£' + demoAvgValue.toLocaleString(undefined, {maximumFractionDigits:0}) + ' <span style="font-size:14px; color:var(--muted)">demo</span> vs £' + noDemoAvgValue.toLocaleString(undefined, {maximumFractionDigits:0}) + ' <span style="font-size:14px; color:var(--muted)">no demo</span></div></div>' +
-    '<div class="demo-stat-card"><h4>Demo Completed → Closed Lost</h4><div class="val" style="color:var(--red)">' + demoLostRate.toFixed(1) + '%</div><div class="sub">' + demoClosedLost.length + ' of ' + allPastDemo.length + ' deals that completed a demo</div></div>' +
-    '<div style="font-size:11px; color:var(--muted); margin-top:8px;">Demo completed stages: ' + esc(demoStageNames) + ' &nbsp;|&nbsp; Onboarding stages: ' + esc(onbStageNames) + '<br>Note: "Demo Booked" stages are excluded — only counting deals that completed a demo</div>';
 }
 
 // ── Show admin button if admin, then auto-login check ──
