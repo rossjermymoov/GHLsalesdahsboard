@@ -666,6 +666,30 @@ async function fetchAllOpportunities(pipelineId) {
 }
 
 // ── Load Dashboard ──
+var ghlUserMap = {
+  'wHtwTIHkQiB83ZUyVzS1': 'Ray',
+  'GUQy21tcdRr8ywpdNI5x': 'Richard'
+};
+
+async function loadGhlUsers() {
+  try {
+    var data = await ghlGet('/users/', {});
+    var users = data.users || [];
+    users.forEach(function(u) {
+      if (u.id && (u.name || u.firstName)) {
+        ghlUserMap[u.id] = u.name || ((u.firstName || '') + ' ' + (u.lastName || '')).trim();
+      }
+    });
+  } catch (e) {
+    console.log('Could not fetch GHL users, using known map:', e.message);
+  }
+}
+
+function resolveUserId(id) {
+  if (!id) return null;
+  return ghlUserMap[id] || null;
+}
+
 async function loadDashboard() {
   hideAllScreens();
   showLoading('Fetching pipelines...');
@@ -687,7 +711,8 @@ async function loadDashboard() {
     var sel2 = document.getElementById('pipelineSelect');
     if (sel2) sel2.value = currentPipelineId;
 
-    showLoading('Loading opportunities...');
+    showLoading('Loading users & opportunities...');
+    await loadGhlUsers();
     allOpportunities = await fetchAllOpportunities(currentPipelineId);
 
     hideLoading();
@@ -1128,12 +1153,13 @@ function renderStaleDeals(stages) {
   }
 
   function getDealOwner(o) {
-    if (o.assignedTo) return o.assignedTo;
-    if (o.contact && o.contact.assignedTo) return o.contact.assignedTo;
-    if (o.assignedUser) return o.assignedUser;
-    // Sometimes it's nested
+    // Check for nested user object with name first
     if (o.assignedToUser && o.assignedToUser.name) return o.assignedToUser.name;
     if (o.assignedToUser && o.assignedToUser.email) return o.assignedToUser.email;
+    // Resolve IDs via the user map
+    if (o.assignedTo) return resolveUserId(o.assignedTo) || o.assignedTo;
+    if (o.contact && o.contact.assignedTo) return resolveUserId(o.contact.assignedTo) || o.contact.assignedTo;
+    if (o.assignedUser) return resolveUserId(o.assignedUser) || o.assignedUser;
     return '—';
   }
 
