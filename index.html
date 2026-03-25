@@ -343,7 +343,7 @@
 
     <!-- Demo Conversion Analysis -->
     <div class="chart-card" style="margin-bottom:24px;">
-      <h3>Demo Impact — Speed to Onboarding</h3>
+      <h3>Demo Completed — Impact on Onboarding</h3>
       <div style="display:flex; gap:24px; flex-wrap:wrap;">
         <div style="flex:1; min-width:280px;">
           <canvas id="demoConversionChart"></canvas>
@@ -1351,14 +1351,22 @@ function renderDemoConversion(opps) {
   var pipeline = allPipelines.find(function(p) { return p.id === currentPipelineId; });
   var stages = pipeline ? (pipeline.stages || []) : [];
 
-  // Detect demo stages
-  var demoKeywords = ['demo', 'discovery', 'presentation', 'meeting', 'call', 'consultation'];
+  // Detect "demo completed" stages only — exclude "demo booked"
+  var demoCompletedKeywords = ['demo completed', 'demo complete', 'demo done'];
+  var demoBookedKeywords = ['demo booked', 'demo scheduled', 'demo requested'];
   var demoStageIds = [];
   stages.forEach(function(s) {
     var name = s.name.toLowerCase();
-    for (var i = 0; i < demoKeywords.length; i++) {
-      if (name.indexOf(demoKeywords[i]) >= 0) { demoStageIds.push(s.id); break; }
+    // First try exact "demo completed" match
+    for (var i = 0; i < demoCompletedKeywords.length; i++) {
+      if (name.indexOf(demoCompletedKeywords[i]) >= 0) { demoStageIds.push(s.id); return; }
     }
+    // If no "completed" stage found yet, skip anything that looks like "booked"
+    for (var j = 0; j < demoBookedKeywords.length; j++) {
+      if (name.indexOf(demoBookedKeywords[j]) >= 0) return;
+    }
+    // Fallback: if the stage just says "demo" without booked/completed qualifier, include it
+    if (name.indexOf('demo') >= 0) { demoStageIds.push(s.id); }
   });
 
   // Detect onboarding stages
@@ -1404,19 +1412,19 @@ function renderDemoConversion(opps) {
     }
   });
 
-  // Average days from creation to reaching current stage (proxy for speed to onboarding)
-  function avgDays(arr) {
+  // Average days from lead creation to reaching onboarding (lastStageChangeAt)
+  function avgDaysToOnboarding(arr) {
     if (arr.length === 0) return 0;
     var total = arr.reduce(function(sum, o) {
       var created = new Date(o.createdAt || Date.now());
-      var stageDate = new Date(o.lastStageChangeAt || o.updatedAt || o.createdAt || Date.now());
-      return sum + Math.max(0, (stageDate - created) / (1000 * 60 * 60 * 24));
+      var reached = new Date(o.lastStageChangeAt || o.updatedAt || o.createdAt || Date.now());
+      return sum + Math.max(0, (reached - created) / (1000 * 60 * 60 * 24));
     }, 0);
     return total / arr.length;
   }
 
-  var demoAvgDays = avgDays(onbWithDemo);
-  var noDemoAvgDays = avgDays(onbWithoutDemo);
+  var demoAvgDays = avgDaysToOnboarding(onbWithDemo);
+  var noDemoAvgDays = avgDaysToOnboarding(onbWithoutDemo);
 
   // Avg deal value at onboarding
   var demoAvgValue = onbWithDemo.length > 0
@@ -1438,10 +1446,10 @@ function renderDemoConversion(opps) {
   charts.demoConversion = new Chart(document.getElementById('demoConversionChart'), {
     type: 'bar',
     data: {
-      labels: ['Deals in Onboarding', 'Avg Days to Onboarding'],
+      labels: ['Deals in Onboarding', 'Avg Days Lead → Onboarding'],
       datasets: [
-        { label: 'With Demo', data: [onbWithDemo.length, Math.round(demoAvgDays)], backgroundColor: '#6366f1cc', borderRadius: 4, borderSkipped: false },
-        { label: 'Without Demo', data: [onbWithoutDemo.length, Math.round(noDemoAvgDays)], backgroundColor: '#71717acc', borderRadius: 4, borderSkipped: false }
+        { label: 'Demo Completed', data: [onbWithDemo.length, Math.round(demoAvgDays)], backgroundColor: '#6366f1cc', borderRadius: 4, borderSkipped: false },
+        { label: 'No Demo', data: [onbWithoutDemo.length, Math.round(noDemoAvgDays)], backgroundColor: '#71717acc', borderRadius: 4, borderSkipped: false }
       ]
     },
     options: {
@@ -1470,12 +1478,12 @@ function renderDemoConversion(opps) {
   var speedStr = speedDiff > 0 ? Math.round(speedDiff) + ' days faster with demo' : (speedDiff < 0 ? Math.round(-speedDiff) + ' days slower with demo' : 'Same speed');
 
   document.getElementById('demoStats').innerHTML =
-    '<div class="demo-stat-card"><h4>Onboarded with Demo</h4><div class="val" style="color:var(--accent)">' + onbWithDemo.length + ' deals</div><div class="sub">Avg ' + Math.round(demoAvgDays) + ' days to onboarding</div></div>' +
-    '<div class="demo-stat-card"><h4>Onboarded without Demo</h4><div class="val" style="color:var(--muted)">' + onbWithoutDemo.length + ' deals</div><div class="sub">Avg ' + Math.round(noDemoAvgDays) + ' days to onboarding</div></div>' +
+    '<div class="demo-stat-card"><h4>Onboarded (Demo Completed)</h4><div class="val" style="color:var(--accent)">' + onbWithDemo.length + ' deals</div><div class="sub">Avg ' + Math.round(demoAvgDays) + ' days lead → onboarding</div></div>' +
+    '<div class="demo-stat-card"><h4>Onboarded (No Demo)</h4><div class="val" style="color:var(--muted)">' + onbWithoutDemo.length + ' deals</div><div class="sub">Avg ' + Math.round(noDemoAvgDays) + ' days lead → onboarding</div></div>' +
     '<div class="demo-stat-card"><h4>Speed Difference</h4><div class="val ' + speedClass + '">' + speedStr + '</div><div class="sub">' + allOnboarded.length + ' total onboarded deals</div></div>' +
     '<div class="demo-stat-card"><h4>Avg Deal Value</h4><div class="val">£' + demoAvgValue.toLocaleString(undefined, {maximumFractionDigits:0}) + ' <span style="font-size:14px; color:var(--muted)">demo</span> vs £' + noDemoAvgValue.toLocaleString(undefined, {maximumFractionDigits:0}) + ' <span style="font-size:14px; color:var(--muted)">no demo</span></div></div>' +
-    '<div class="demo-stat-card"><h4>Demo → Closed Lost</h4><div class="val" style="color:var(--red)">' + demoLostRate.toFixed(1) + '%</div><div class="sub">' + demoClosedLost.length + ' of ' + allPastDemo.length + ' deals that had a demo</div></div>' +
-    '<div style="font-size:11px; color:var(--muted); margin-top:8px;">Demo stages: ' + esc(demoStageNames) + ' &nbsp;|&nbsp; Onboarding stages: ' + esc(onbStageNames) + '</div>';
+    '<div class="demo-stat-card"><h4>Demo Completed → Closed Lost</h4><div class="val" style="color:var(--red)">' + demoLostRate.toFixed(1) + '%</div><div class="sub">' + demoClosedLost.length + ' of ' + allPastDemo.length + ' deals that completed a demo</div></div>' +
+    '<div style="font-size:11px; color:var(--muted); margin-top:8px;">Demo completed stages: ' + esc(demoStageNames) + ' &nbsp;|&nbsp; Onboarding stages: ' + esc(onbStageNames) + '<br>Note: "Demo Booked" stages are excluded — only counting deals that completed a demo</div>';
 }
 
 // ── Show admin button if admin, then auto-login check ──
