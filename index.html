@@ -325,6 +325,27 @@
       <canvas id="sourceChart" style="max-height:400px;"></canvas>
     </div>
 
+    <!-- Wins by Lead Source -->
+    <div class="table-card" style="margin-bottom:24px;">
+      <h3>Wins by Lead Source</h3>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Wins</th>
+              <th>Total Leads</th>
+              <th>Win Rate</th>
+              <th>Won Revenue</th>
+              <th>Avg Deal Value</th>
+              <th>% of Total Revenue</th>
+            </tr>
+          </thead>
+          <tbody id="winsBySourceBody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Week on Week Comparison -->
     <div class="charts-grid" style="margin-bottom:24px;">
       <div class="chart-card">
@@ -1038,6 +1059,9 @@ function renderDashboard() {
     }
   });
 
+  // ── Wins by Lead Source ──
+  renderWinsBySource(opps);
+
   // ── Week on Week Analysis ──
   renderWeekOnWeek(opps, stages);
 
@@ -1138,6 +1162,59 @@ function formatMonth(ym) {
   const [y, m] = ym.split('-');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return months[parseInt(m)-1] + ' ' + y;
+}
+
+// ── Wins by Lead Source ──
+function renderWinsBySource(opps) {
+  var sourceData = {};
+  opps.forEach(function(o) {
+    var src = o.source || o.leadSource || 'Unknown';
+    if (!sourceData[src]) sourceData[src] = { wins: 0, total: 0, wonValue: 0 };
+    sourceData[src].total++;
+    if (o.status === 'won') {
+      sourceData[src].wins++;
+      sourceData[src].wonValue += (o.monetaryValue || 0);
+    }
+  });
+
+  var totalWonRevenue = Object.keys(sourceData).reduce(function(s, k) { return s + sourceData[k].wonValue; }, 0);
+
+  // Sort by won revenue descending
+  var sorted = Object.keys(sourceData).sort(function(a, b) {
+    return sourceData[b].wonValue - sourceData[a].wonValue;
+  });
+
+  var tbody = document.getElementById('winsBySourceBody');
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--muted); padding:24px;">No data</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = sorted.map(function(src) {
+    var d = sourceData[src];
+    var winRate = d.total > 0 ? (d.wins / d.total * 100) : 0;
+    var avgDeal = d.wins > 0 ? d.wonValue / d.wins : 0;
+    var revPct = totalWonRevenue > 0 ? (d.wonValue / totalWonRevenue * 100) : 0;
+    var sourceColor = getSourceColor(src);
+    var winRateColor = winRate >= 30 ? 'var(--green)' : winRate >= 15 ? 'var(--amber)' : 'var(--muted)';
+
+    // Revenue share bar
+    var barWidth = Math.max(2, revPct);
+    var bar = '<div style="display:flex; align-items:center; gap:8px;">'
+      + '<div style="width:60px; background:var(--border); border-radius:4px; height:8px; overflow:hidden;">'
+      + '<div style="width:' + barWidth + '%; height:100%; background:var(--accent); border-radius:4px;"></div></div>'
+      + '<span>' + revPct.toFixed(1) + '%</span></div>';
+
+    return '<tr>'
+      + '<td><span class="source-tag" style="background:' + sourceColor.bg + '; color:' + sourceColor.text + '; border:1px solid ' + sourceColor.border + '">' + esc(src) + '</span></td>'
+      + '<td style="font-weight:700;">' + d.wins + '</td>'
+      + '<td>' + d.total + '</td>'
+      + '<td style="color:' + winRateColor + '; font-weight:600;">' + winRate.toFixed(1) + '%</td>'
+      + '<td style="font-weight:700;">£' + d.wonValue.toLocaleString() + '</td>'
+      + '<td>£' + avgDeal.toLocaleString(undefined, {maximumFractionDigits:0}) + '</td>'
+      + '<td>' + bar + '</td>'
+      + '</tr>';
+  }).join('');
 }
 
 // ── Active Leads (being worked on) ──
