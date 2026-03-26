@@ -925,15 +925,27 @@ function renderDashboard() {
   allOpps.forEach(function(o) { var s = o.status || '(null)'; statusAudit[s] = (statusAudit[s] || 0) + 1; });
   console.log('Status breakdown (all opps):', JSON.stringify(statusAudit));
 
-  // Long Term Revisit detail
-  var ltrStage = allStages.find(function(s) { return s.name.toLowerCase().indexOf('long term') >= 0; });
-  if (ltrStage) {
-    var ltrOpps = allOpps.filter(function(o) { return (o.pipelineStageId || o.stageId) === ltrStage.id; });
-    console.log('Long Term Revisit: ' + ltrOpps.length + ' opps, stage ID: ' + ltrStage.id);
-    ltrOpps.forEach(function(o) {
-      console.log('  - ' + getBusinessName(o) + ' | status=' + (o.status || 'null') + ' | value=' + (o.monetaryValue || 0));
-    });
-  }
+  // Detail per stage — every business listed
+  Object.keys(stageAudit).forEach(function(name) {
+    var d = stageAudit[name];
+    if (d.count > 0) {
+      console.log('--- ' + name + ' (' + d.count + ') ---');
+      d.businesses.forEach(function(b) { console.log('  ' + b); });
+    }
+  });
+
+  // Also show what the dashboard actually uses (after abandoned filter)
+  var dashboardStageCount = {};
+  stages.forEach(function(s) { dashboardStageCount[s.name] = 0; });
+  opps.forEach(function(o) {
+    var sid = o.pipelineStageId || o.stageId;
+    var s = stages.find(function(st) { return st.id === sid; });
+    if (s) dashboardStageCount[s.name]++;
+  });
+  console.log('Dashboard counts (after excluding abandoned):');
+  Object.keys(dashboardStageCount).forEach(function(name) {
+    console.log('  ' + name + ': ' + dashboardStageCount[name]);
+  });
   console.log('=== END AUDIT ===');
 
   // Timestamp
