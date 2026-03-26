@@ -1719,7 +1719,7 @@ function renderWeekOnWeek(opps, stages, onbStageIds) {
 
   document.getElementById('wowKpis').innerHTML =
     '<div class="kpi-card"><div class="kpi-label">New Opps This Week</div><div class="kpi-value">' + twTotal + '</div><div class="kpi-sub">' + deltaHTML(twTotal, lwTotal) + '</div></div>' +
-    '<div class="kpi-card"><div class="kpi-label">Onboarded This Week</div><div class="kpi-value">' + twWon + '</div><div class="kpi-sub">' + deltaHTML(twWon, lwWon) + '</div></div>' +
+    '<div class="kpi-card"><div class="kpi-label">New Customers Won</div><div class="kpi-value">' + twWon + '</div><div class="kpi-sub">' + deltaHTML(twWon, lwWon) + '</div></div>' +
     '<div class="kpi-card"><div class="kpi-label">Pipeline Value This Week</div><div class="kpi-value">£' + twValue.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twValue, lwValue, '£') + '</div></div>' +
     '<div class="kpi-card"><div class="kpi-label">Onboarding Revenue This Week</div><div class="kpi-value">£' + twWonVal.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twWonVal, lwWonVal, '£') + '</div></div>';
 }
