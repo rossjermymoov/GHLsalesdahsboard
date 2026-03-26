@@ -343,6 +343,29 @@
     <div id="staleDealsSectionAccountForm" class="table-card" style="margin-bottom:16px; border-left: 3px solid var(--cyan);"></div>
     <div id="staleDealsSectionPricing" class="table-card" style="margin-bottom:24px; border-left: 3px solid var(--accent2);"></div>
 
+    <!-- Active Leads Table -->
+    <div class="table-card" style="margin-bottom:24px;">
+      <h3>Active Leads <span id="activeLeadsCount" style="font-size:13px; font-weight:400; color:var(--muted);"></span></h3>
+      <div id="activeLeadsMissing" style="padding:0 24px 12px; display:none;"></div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Business</th>
+              <th>Owner</th>
+              <th>Stage</th>
+              <th>Value</th>
+              <th>Source</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Days in Stage</th>
+            </tr>
+          </thead>
+          <tbody id="activeLeadsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Recent Opportunities Table -->
     <div class="table-card">
       <h3>Recent Opportunities</h3>
@@ -350,7 +373,7 @@
         <table id="oppsTable">
           <thead>
             <tr>
-              <th>Contact</th>
+              <th>Business</th>
               <th>Owner</th>
               <th>Stage</th>
               <th>Status</th>
@@ -855,7 +878,7 @@ function renderDashboard() {
     if (data.opps.length > 0) {
       const sortedOpps = [...data.opps].sort((a,b) => new Date(a.lastStageChangeAt || a.updatedAt || a.createdAt || 0) - new Date(b.lastStageChangeAt || b.updatedAt || b.createdAt || 0));
       tooltipRows = sortedOpps.map(o => {
-        const name = o.contact ? (o.contact.name || o.contact.email || o.contact.phone || 'Unknown') : (o.name || 'Unknown');
+        const name = getBusinessName(o);
         const val = o.monetaryValue ? '£' + o.monetaryValue.toLocaleString() : '—';
         const stageDate = new Date(o.lastStageChangeAt || o.updatedAt || o.createdAt || Date.now());
         const daysInStage = Math.max(0, Math.floor((Date.now() - stageDate) / (1000 * 60 * 60 * 24)));
@@ -874,7 +897,7 @@ function renderDashboard() {
       + '<div class="funnel-stats"><strong>£' + data.value.toLocaleString() + '</strong> &middot; ' + data.count + ' ' + dealWord + '</div>'
       + '<div class="funnel-tooltip">'
       + '<h4>' + esc(stageName) + ' — ' + data.count + ' ' + dealWord + '</h4>'
-      + '<table><thead><tr><th>Customer</th><th>Value</th><th>Time in Stage</th></tr></thead>'
+      + '<table><thead><tr><th>Business</th><th>Value</th><th>Time in Stage</th></tr></thead>'
       + '<tbody>' + tooltipRows + '</tbody></table>'
       + '</div></div>';
   });
@@ -1001,6 +1024,9 @@ function renderDashboard() {
   // ── Stale Deals ──
   renderStaleDeals(stages);
 
+  // ── Active Leads (1st contact attempted and above) ──
+  renderActiveLeads(opps, stages);
+
   // ── Table ──
   const sorted = [...opps].sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 50);
   const stageIdNameMap = {};
@@ -1010,7 +1036,7 @@ function renderDashboard() {
     const stageName = stageIdNameMap[o.pipelineStageId || o.stageId] || o.pipelineStageId || '—';
     const status = o.status || 'open';
     const statusClass = 'status-' + status;
-    const contactName = o.contact ? (o.contact.name || o.contact.email || o.contact.phone || '—') : (o.name || '—');
+    const contactName = getBusinessName(o);
     const value = o.monetaryValue ? '£' + o.monetaryValue.toLocaleString() : '—';
     const source = o.source || o.leadSource || '—';
     const sourceColor = getSourceColor(source);
@@ -1094,6 +1120,128 @@ function formatMonth(ym) {
   return months[parseInt(m)-1] + ' ' + y;
 }
 
+// ── Active Leads (being worked on) ──
+function renderActiveLeads(opps, stages) {
+  var stageOrder = {};
+  var stageNames = {};
+  stages.forEach(function(s, i) { stageOrder[s.id] = i; stageNames[s.id] = s.name; });
+
+  // Find the "1st contact attempted" stage or equivalent (first stage that implies active work)
+  var firstActiveOrder = -1;
+  var activeKeywords = ['1st contact', 'first contact', 'contact attempted', 'contacted', 'qualifying', 'qualified'];
+  stages.forEach(function(s) {
+    var name = s.name.toLowerCase();
+    for (var i = 0; i < activeKeywords.length; i++) {
+      if (name.indexOf(activeKeywords[i]) >= 0) {
+        if (firstActiveOrder === -1 || stageOrder[s.id] < firstActiveOrder) {
+          firstActiveOrder = stageOrder[s.id];
+        }
+        return;
+      }
+    }
+  });
+
+  // If no keyword match, use the 2nd stage (skip the first "new/uncontacted" stage)
+  if (firstActiveOrder === -1 && stages.length > 1) {
+    firstActiveOrder = 1;
+  }
+
+  // Filter to open deals at or past the first active stage, exclude won/lost
+  var now = Date.now();
+  var activeLeads = [];
+  var missingInfo = [];
+  opps.forEach(function(o) {
+    if (o.status === 'won' || o.status === 'lost') return;
+    var sid = o.pipelineStageId || o.stageId;
+    var ord = stageOrder[sid] !== undefined ? stageOrder[sid] : -1;
+    if (ord >= firstActiveOrder) {
+      var business = getBusinessName(o);
+      var owner = getDealOwner(o);
+      var value = o.monetaryValue ? '£' + o.monetaryValue.toLocaleString() : '';
+      var source = o.source || o.leadSource || '';
+      var email = (o.contact && o.contact.email) ? o.contact.email : '';
+      var phone = (o.contact && o.contact.phone) ? o.contact.phone : '';
+      var stageDate = new Date(o.lastStageChangeAt || o.updatedAt || o.createdAt || now);
+      var days = Math.max(0, Math.floor((now - stageDate) / (1000 * 60 * 60 * 24)));
+      var stageName = stageNames[sid] || '—';
+
+      // Track missing fields
+      var missing = [];
+      if (!o.contact || !o.contact.companyName) missing.push('business name');
+      if (!value) missing.push('value');
+      if (!source) missing.push('source');
+      if (owner === '—') missing.push('owner');
+      if (!email) missing.push('email');
+      if (!phone) missing.push('phone');
+
+      activeLeads.push({
+        business: business, owner: owner, stageName: stageName,
+        value: value, source: source, email: email, phone: phone,
+        days: days, missing: missing, opp: o
+      });
+
+      if (missing.length > 0) {
+        missingInfo.push({ business: business, missing: missing });
+      }
+    }
+  });
+
+  // Sort by days in stage descending
+  activeLeads.sort(function(a, b) { return b.days - a.days; });
+
+  // Count badge
+  document.getElementById('activeLeadsCount').textContent = '(' + activeLeads.length + ' leads)';
+
+  // Missing info warning
+  var missingEl = document.getElementById('activeLeadsMissing');
+  if (missingInfo.length > 0) {
+    missingEl.style.display = 'block';
+    var missingHtml = '<div style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); border-radius:8px; padding:12px 16px; font-size:12px;">';
+    missingHtml += '<div style="font-weight:700; color:var(--red); margin-bottom:8px;">&#9888; ' + missingInfo.length + ' lead' + (missingInfo.length === 1 ? '' : 's') + ' with missing information</div>';
+    missingInfo.forEach(function(m) {
+      missingHtml += '<div style="color:var(--text); margin-bottom:2px;"><span style="font-weight:600;">' + esc(m.business) + '</span> — missing: <span style="color:var(--red);">' + m.missing.join(', ') + '</span></div>';
+    });
+    missingHtml += '</div>';
+    missingEl.innerHTML = missingHtml;
+  } else {
+    missingEl.style.display = 'none';
+  }
+
+  // Table rows
+  var tbody = document.getElementById('activeLeadsBody');
+  if (activeLeads.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--muted); padding:24px;">No active leads found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = activeLeads.map(function(l) {
+    var sourceColor = l.source ? getSourceColor(l.source) : { bg: 'transparent', text: 'var(--muted)', border: 'var(--border)' };
+    var daysColor = l.days >= 14 ? 'var(--red)' : l.days >= 7 ? 'var(--amber)' : 'var(--green)';
+    var rowStyle = l.missing.length > 0 ? ' style="background:rgba(239,68,68,0.04);"' : '';
+    return '<tr' + rowStyle + '>'
+      + '<td style="font-weight:600;">' + esc(l.business) + '</td>'
+      + '<td>' + esc(l.owner) + '</td>'
+      + '<td>' + esc(l.stageName) + '</td>'
+      + '<td>' + (l.value || '<span style="color:var(--red);">—</span>') + '</td>'
+      + '<td>' + (l.source ? '<span class="source-tag" style="background:' + sourceColor.bg + '; color:' + sourceColor.text + '; border:1px solid ' + sourceColor.border + '">' + esc(l.source) + '</span>' : '<span style="color:var(--red);">—</span>') + '</td>'
+      + '<td>' + (l.email ? esc(l.email) : '<span style="color:var(--red);">—</span>') + '</td>'
+      + '<td>' + (l.phone ? esc(l.phone) : '<span style="color:var(--red);">—</span>') + '</td>'
+      + '<td style="font-weight:700; color:' + daysColor + ';">' + l.days + ' days</td>'
+      + '</tr>';
+  }).join('');
+}
+
+// ── Business Name Helper (global) ──
+function getBusinessName(o) {
+  // Priority: companyName on contact, then opportunity name, then contact name, then fallbacks
+  if (o.contact && o.contact.companyName) return o.contact.companyName;
+  if (o.companyName) return o.companyName;
+  if (o.name) return o.name;
+  if (o.contact && o.contact.name) return o.contact.name;
+  if (o.contact && o.contact.email) return o.contact.email;
+  return '—';
+}
+
 // ── Deal Owner Helper (global) ──
 function getDealOwner(o) {
   if (o.assignedToUser && o.assignedToUser.name) return o.assignedToUser.name;
@@ -1163,11 +1311,11 @@ function renderStaleDeals(stages) {
     }
 
     html += '<div style="overflow-x:auto"><table><thead><tr>'
-      + '<th>Contact</th><th>Deal Owner</th><th>Value</th><th>Source</th><th style="color:' + accentColor + '">Days in Stage</th><th>Created</th></tr></thead><tbody>';
+      + '<th>Business</th><th>Deal Owner</th><th>Value</th><th>Source</th><th style="color:' + accentColor + '">Days in Stage</th><th>Created</th></tr></thead><tbody>';
 
     staleOpps.forEach(function(item) {
       var o = item.opp;
-      var contactName = o.contact ? (o.contact.name || o.contact.email || o.contact.phone || '—') : (o.name || '—');
+      var contactName = getBusinessName(o);
       var owner = getDealOwner(o);
       var value = o.monetaryValue ? '£' + o.monetaryValue.toLocaleString() : '—';
       var source = o.source || o.leadSource || '—';
