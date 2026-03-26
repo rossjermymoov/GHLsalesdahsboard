@@ -237,6 +237,7 @@
               <th>Name</th>
               <th>Email</th>
               <th>Joined</th>
+              <th>Role</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
@@ -264,6 +265,7 @@
       <span class="badge" id="pipelineBadge"></span>
       <span class="badge" id="lastUpdated"></span>
       <button class="btn-sm" onclick="refreshData()">Refresh</button>
+      <button class="btn-sm" id="managementBtn" style="display:none" onclick="switchTab('management')">Management</button>
       <button class="btn-sm" id="adminBtn" style="display:none" onclick="showAdminPanel()">Admin</button>
       <button class="btn-sm" onclick="logout()">Logout</button>
     </div>
@@ -294,56 +296,7 @@
 
     <!-- KPIs -->
     <div class="kpi-row" id="kpiRow"></div>
-    <div class="kpi-row" id="wowKpis" style="margin-bottom:8px;"></div>
-    <!-- Weekly Management Metrics (Row 3) -->
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-      <span style="font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Weekly Management Metrics</span>
-      <button class="btn-sm" onclick="openMetricsModal()" style="font-size:11px; padding:4px 12px;">Edit Metrics</button>
-    </div>
-    <div class="kpi-row" id="weeklyMetricsRow" style="margin-bottom:24px;"></div>
-
-    <!-- Weekly Metrics Modal -->
-    <div id="metricsModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
-      <div style="background:var(--card); border:1px solid var(--border); border-radius:12px; padding:28px; width:420px; max-width:90vw; max-height:85vh; overflow-y:auto;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-          <h3 style="margin:0; font-size:16px;">Weekly Metrics</h3>
-          <button onclick="closeMetricsModal()" style="background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; padding:4px 8px;">&times;</button>
-        </div>
-        <div style="font-size:12px; color:var(--muted); margin-bottom:16px;">Week: <strong id="metricsWeekLabel"></strong></div>
-        <div style="display:flex; flex-direction:column; gap:12px;">
-          <div style="display:flex; gap:8px;">
-            <div style="flex:1;">
-              <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Talk Time (hours)</label>
-              <input type="number" id="metricTalkHrs" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
-            </div>
-            <div style="flex:1;">
-              <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Talk Time (mins)</label>
-              <input type="number" id="metricTalkMins" min="0" max="59" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
-            </div>
-          </div>
-          <div>
-            <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Total Number of Calls</label>
-            <input type="number" id="metricTotalCalls" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
-          </div>
-          <div>
-            <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Clients Went Live Last Week</label>
-            <input type="number" id="metricClientsLive" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
-          </div>
-          <div>
-            <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Clients Lost</label>
-            <input type="number" id="metricClientsLost" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
-          </div>
-          <div>
-            <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Client Referrals</label>
-            <input type="number" id="metricReferrals" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
-          </div>
-        </div>
-        <div style="display:flex; gap:8px; margin-top:20px;">
-          <button class="btn-primary" style="flex:1;" onclick="saveWeeklyMetrics()">Save</button>
-          <button class="btn-sm" style="flex:1; padding:10px;" onclick="closeMetricsModal()">Cancel</button>
-        </div>
-      </div>
-    </div>
+    <div class="kpi-row" id="wowKpis" style="margin-bottom:24px;"></div>
 
     <!-- Funnel -->
     <div class="funnel" id="funnelSection"></div>
@@ -459,6 +412,69 @@
   </div>
 </div>
 
+<!-- Management Panel (managers/admins only) -->
+<div class="dashboard" id="managementPanel" style="display:none">
+  <div class="topbar">
+    <div><h1>Management Metrics</h1></div>
+    <div class="topbar-right">
+      <button class="btn-sm" onclick="switchTab('dashboard')">Back to Dashboard</button>
+      <button class="btn-sm" id="mgmtAdminBtn" style="display:none" onclick="showAdminPanel()">Admin</button>
+      <button class="btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </div>
+  <div class="main">
+    <!-- Weekly Management Metrics -->
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+      <span style="font-size:14px; font-weight:600; color:var(--text);">Weekly Metrics — <span id="mgmtWeekDisplay"></span></span>
+      <button class="btn-sm" onclick="openMetricsModal()" style="font-size:11px; padding:4px 12px;">Edit Metrics</button>
+    </div>
+    <div class="kpi-row" id="weeklyMetricsRow" style="margin-bottom:24px;"></div>
+
+    <!-- Weekly Metrics Modal -->
+    <div id="metricsModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:12px; padding:28px; width:420px; max-width:90vw; max-height:85vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+          <h3 style="margin:0; font-size:16px;">Weekly Metrics</h3>
+          <button onclick="closeMetricsModal()" style="background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; padding:4px 8px;">&times;</button>
+        </div>
+        <div style="font-size:12px; color:var(--muted); margin-bottom:16px;">Week: <strong id="metricsWeekLabel"></strong></div>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div style="display:flex; gap:8px;">
+            <div style="flex:1;">
+              <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Talk Time (hours)</label>
+              <input type="number" id="metricTalkHrs" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Talk Time (mins)</label>
+              <input type="number" id="metricTalkMins" min="0" max="59" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Total Number of Calls</label>
+            <input type="number" id="metricTotalCalls" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Clients Went Live Last Week</label>
+            <input type="number" id="metricClientsLive" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Clients Lost</label>
+            <input type="number" id="metricClientsLost" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Client Referrals</label>
+            <input type="number" id="metricReferrals" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:20px;">
+          <button class="btn-primary" style="flex:1;" onclick="saveWeeklyMetrics()">Save</button>
+          <button class="btn-sm" style="flex:1; padding:10px;" onclick="closeMetricsModal()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const BASE = '/api';
 let allPipelines = [];
@@ -467,6 +483,7 @@ let currentPipelineId = '';
 let charts = {};
 let dateRangeMode = 'all';
 let isAdminUser = false;
+let isManagerUser = false;
 
 const COLORS = ['#6366f1','#8b5cf6','#06b6d4','#3b82f6','#22c55e','#f59e0b','#ef4444','#ec4899','#14b8a6','#f97316'];
 
@@ -474,7 +491,7 @@ const COLORS = ['#6366f1','#8b5cf6','#06b6d4','#3b82f6','#22c55e','#f59e0b','#ef
 var pendingInviteCode = '';
 
 function hideAllScreens() {
-  ['loginScreen','inviteScreen','registerScreen','adminLoginScreen','adminPanel','dashboard','loadingOverlay'].forEach(function(id) {
+  ['loginScreen','inviteScreen','registerScreen','adminLoginScreen','adminPanel','dashboard','managementPanel','loadingOverlay'].forEach(function(id) {
     document.getElementById(id).style.display = 'none';
   });
 }
@@ -530,6 +547,7 @@ async function registerAccount() {
     var data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Registration failed');
     isAdminUser = false;
+    isManagerUser = false;
     loadDashboard();
   } catch (e) {
     errEl.textContent = e.message;
@@ -555,6 +573,8 @@ async function loginWithEmail() {
     var data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Login failed');
     isAdminUser = false;
+    // Check if user is a manager
+    try { var authData = await (await fetch('/auth/check')).json(); isManagerUser = !!authData.isManager; } catch(e) {}
     loadDashboard();
   } catch (e) {
     errEl.textContent = e.message;
@@ -587,6 +607,7 @@ async function loginAsAdmin() {
 async function logout() {
   await fetch('/auth/logout', { method: 'POST' });
   isAdminUser = false;
+  isManagerUser = false;
   showUserLogin();
 }
 
@@ -594,6 +615,7 @@ async function checkAuth() {
   try {
     var res = await fetch('/auth/check');
     var data = await res.json();
+    isManagerUser = !!data.isManager;
     if (data.isAdmin) { isAdminUser = true; showAdminPanel(); }
     else if (data.authenticated) { loadDashboard(); }
     else { showUserLogin(); }
@@ -645,7 +667,7 @@ async function refreshUsers() {
     var tbody = document.getElementById('usersBody');
     var entries = Object.entries(u).sort(function(a,b) { return (b[1].createdAt||0) - (a[1].createdAt||0); });
     if (entries.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted); text-align:center; padding:24px;">No registered users yet.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted); text-align:center; padding:24px;">No registered users yet.</td></tr>';
       return;
     }
     tbody.innerHTML = entries.map(function(entry) {
@@ -653,10 +675,13 @@ async function refreshUsers() {
       var date = usr.createdAt ? new Date(usr.createdAt).toLocaleDateString() : '—';
       var statusClass = usr.active ? 'status-open' : 'status-lost';
       var statusText = usr.active ? 'Active' : 'Disabled';
+      var roleTag = usr.isManager
+        ? '<span class="status-pill status-open" style="cursor:pointer;" onclick="toggleManager(\'' + esc(email) + '\')">Manager</span>'
+        : '<span class="status-pill" style="cursor:pointer; background:var(--border); color:var(--muted);" onclick="toggleManager(\'' + esc(email) + '\')">User</span>';
       var action = usr.active
         ? '<button class="btn-sm" onclick="deactivateUser(\'' + esc(email) + '\')" style="font-size:11px; padding:4px 10px;">Disable</button>'
         : '<button class="btn-sm" onclick="activateUser(\'' + esc(email) + '\')" style="font-size:11px; padding:4px 10px;">Enable</button>';
-      return '<tr><td>' + esc(usr.name) + '</td><td>' + esc(email) + '</td><td>' + date + '</td><td><span class="status-pill ' + statusClass + '">' + statusText + '</span></td><td>' + action + '</td></tr>';
+      return '<tr><td>' + esc(usr.name) + '</td><td>' + esc(email) + '</td><td>' + date + '</td><td>' + roleTag + '</td><td><span class="status-pill ' + statusClass + '">' + statusText + '</span></td><td>' + action + '</td></tr>';
     }).join('');
   } catch (e) { console.error('Failed to load users:', e); }
 }
@@ -699,6 +724,15 @@ async function deactivateUser(email) {
 
 async function activateUser(email) {
   await fetch('/admin/users/activate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email })
+  });
+  refreshUsers();
+}
+
+async function toggleManager(email) {
+  await fetch('/admin/users/toggle-manager', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: email })
@@ -795,6 +829,11 @@ async function loadDashboard() {
 
     hideLoading();
     document.getElementById('dashboard').style.display = 'block';
+    // Show management button for managers/admins
+    if (isManagerUser || isAdminUser) {
+      var mgmtBtn = document.getElementById('managementBtn');
+      if (mgmtBtn) mgmtBtn.style.display = '';
+    }
     renderDashboard();
   } catch (e) {
     hideLoading();
@@ -802,6 +841,29 @@ async function loadDashboard() {
     var errEl = document.getElementById('loginError');
     errEl.textContent = e.message || 'Failed to load dashboard.';
     errEl.style.display = 'block';
+  }
+}
+
+function switchTab(tab) {
+  if (tab === 'management') {
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('managementPanel').style.display = 'block';
+    // Show admin button on management panel too
+    if (isAdminUser) {
+      var btn = document.getElementById('mgmtAdminBtn');
+      if (btn) btn.style.display = '';
+    }
+    // Update week display and load metrics
+    var week = getCurrentWeekKey();
+    var weekEl = document.getElementById('mgmtWeekDisplay');
+    if (weekEl) weekEl.textContent = week;
+    fetch('/metrics/weekly?week=' + week).then(function(r) { return r.json(); }).then(function(data) {
+      currentWeekMetrics = data.metrics || {};
+      renderWeeklyMetricsRow();
+    }).catch(function() { renderWeeklyMetricsRow(); });
+  } else {
+    document.getElementById('managementPanel').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
   }
 }
 
@@ -1263,12 +1325,6 @@ function renderDashboard() {
   window._ghlFormsCompleted = movedThisWeekToStage('assigned to onboarding');
   window._ghlQuotesSentThisWeek = movedThisWeekToStage('pricing sent');
   window._ghlTotalOnboarding = opps.filter(function(o) { return onboardingStageIds[o.pipelineStageId || o.stageId]; }).length;
-
-  // Load manual metrics and render the row
-  fetch('/metrics/weekly?week=' + getCurrentWeekKey()).then(function(r) { return r.json(); }).then(function(data) {
-    currentWeekMetrics = data.metrics || {};
-    renderWeeklyMetricsRow();
-  }).catch(function() { renderWeeklyMetricsRow(); });
 
   // ── Table ──
   const sorted = [...opps].sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 50);
@@ -1914,6 +1970,10 @@ window.addEventListener('DOMContentLoaded', function() {
     if (isAdminUser) {
       var btn = document.getElementById('adminBtn');
       if (btn) btn.style.display = '';
+    }
+    if (isManagerUser || isAdminUser) {
+      var mgmtBtn = document.getElementById('managementBtn');
+      if (mgmtBtn) mgmtBtn.style.display = '';
     }
   });
 });

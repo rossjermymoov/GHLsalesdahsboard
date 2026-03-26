@@ -100,6 +100,13 @@ function isAdmin(req) {
   return s && s.isAdmin;
 }
 
+function isManager(req) {
+  const s = getSession(req);
+  if (!s) return false;
+  if (s.isAdmin) return true;
+  return s.email && users[s.email] && !!users[s.email].isManager;
+}
+
 function jsonResponse(res, status, data) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(data));
@@ -234,9 +241,11 @@ const server = http.createServer(async (req, res) => {
   if (url === '/auth/check') {
     const s = getSession(req);
     const userName = s && !s.isAdmin && users[s.email] ? users[s.email].name : '';
+    const isManagerUser = s && !s.isAdmin && users[s.email] ? !!users[s.email].isManager : false;
     jsonResponse(res, 200, {
       authenticated: !!s,
       isAdmin: s ? s.isAdmin : false,
+      isManager: s ? (s.isAdmin || isManagerUser) : false,
       name: userName,
       hasCredentials: !!(GHL_API_KEY && GHL_LOCATION_ID)
     });
@@ -300,7 +309,7 @@ const server = http.createServer(async (req, res) => {
     if (!isAdmin(req)) return jsonResponse(res, 401, { error: 'Unauthorized' });
     const safeUsers = {};
     Object.entries(users).forEach(([email, u]) => {
-      safeUsers[email] = { name: u.name, createdAt: u.createdAt, active: u.active, inviteCode: u.inviteCode };
+      safeUsers[email] = { name: u.name, createdAt: u.createdAt, active: u.active, isManager: !!u.isManager, inviteCode: u.inviteCode };
     });
     jsonResponse(res, 200, { users: safeUsers });
     return;
@@ -329,13 +338,25 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // POST /admin/users/toggle-manager — toggle manager role
+  if (url === '/admin/users/toggle-manager' && req.method === 'POST') {
+    if (!isAdmin(req)) return jsonResponse(res, 401, { error: 'Unauthorized' });
+    const body = await parseBody(req);
+    if (users[body.email]) {
+      users[body.email].isManager = !users[body.email].isManager;
+      saveUsers();
+    }
+    jsonResponse(res, 200, { ok: true, isManager: users[body.email] ? !!users[body.email].isManager : false });
+    return;
+  }
+
   // ════════════════════════════════════════
   // WEEKLY METRICS ENDPOINTS
   // ════════════════════════════════════════
 
   // GET /metrics/weekly?week=2026-W13  (returns metrics for that week, or current week if omitted)
   if (url === '/metrics/weekly' && req.method === 'GET') {
-    if (!isAuthenticated(req)) return jsonResponse(res, 401, { error: 'Not authenticated' });
+    if (!isManager(req)) return jsonResponse(res, 401, { error: 'Manager access required' });
     const params = new URL(req.url, 'http://localhost').searchParams;
     const week = params.get('week') || getCurrentWeek();
     jsonResponse(res, 200, { week, metrics: weeklyMetrics[week] || {} });
@@ -344,7 +365,7 @@ const server = http.createServer(async (req, res) => {
 
   // POST /metrics/weekly — save manual metrics for a week
   if (url === '/metrics/weekly' && req.method === 'POST') {
-    if (!isAuthenticated(req)) return jsonResponse(res, 401, { error: 'Not authenticated' });
+    if (!isManager(req)) return jsonResponse(res, 401, { error: 'Manager access required' });
     const body = await parseBody(req);
     const week = body.week || getCurrentWeek();
     weeklyMetrics[week] = Object.assign(weeklyMetrics[week] || {}, body.metrics || {});
