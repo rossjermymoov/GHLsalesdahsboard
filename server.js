@@ -18,15 +18,19 @@ const DATA_DIR = process.env.DATA_DIR || __dirname;
 if (!fs.existsSync(DATA_DIR)) { fs.mkdirSync(DATA_DIR, { recursive: true }); }
 const INVITES_FILE = path.join(DATA_DIR, 'invites.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const METRICS_FILE = path.join(DATA_DIR, 'weekly-metrics.json');
 
 let invites = {};   // { code: { name, createdAt, active, usedBy } }
 let users = {};      // { email: { name, passwordHash, salt, inviteCode, createdAt, active } }
 let sessions = {};   // { token: { email, createdAt, isAdmin } }
+let weeklyMetrics = {}; // { "2026-W13": { talkTimeHrs, talkTimeMins, totalCalls, clientsLive, clientsLost, referrals } }
 
 function loadData() {
   try { if (fs.existsSync(INVITES_FILE)) invites = JSON.parse(fs.readFileSync(INVITES_FILE, 'utf8')); } catch (e) { invites = {}; }
   try { if (fs.existsSync(USERS_FILE)) users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch (e) { users = {}; }
+  try { if (fs.existsSync(METRICS_FILE)) weeklyMetrics = JSON.parse(fs.readFileSync(METRICS_FILE, 'utf8')); } catch (e) { weeklyMetrics = {}; }
 }
+function saveMetrics() { fs.writeFileSync(METRICS_FILE, JSON.stringify(weeklyMetrics, null, 2)); }
 function saveInvites() { fs.writeFileSync(INVITES_FILE, JSON.stringify(invites, null, 2)); }
 function saveUsers() { fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2)); }
 loadData();
@@ -49,6 +53,14 @@ function verifyPassword(password, hash, salt) {
       resolve(key.toString('hex') === hash);
     });
   });
+}
+
+function getCurrentWeek() {
+  const now = new Date();
+  const jan1 = new Date(now.getFullYear(), 0, 1);
+  const days = Math.floor((now - jan1) / 86400000);
+  const weekNum = Math.ceil((days + jan1.getDay() + 1) / 7);
+  return now.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
 }
 
 function generateCode() { return crypto.randomBytes(3).toString('hex').toUpperCase(); }
@@ -314,6 +326,30 @@ const server = http.createServer(async (req, res) => {
     const body = await parseBody(req);
     if (users[body.email]) { users[body.email].active = true; saveUsers(); }
     jsonResponse(res, 200, { ok: true });
+    return;
+  }
+
+  // ════════════════════════════════════════
+  // WEEKLY METRICS ENDPOINTS
+  // ════════════════════════════════════════
+
+  // GET /metrics/weekly?week=2026-W13  (returns metrics for that week, or current week if omitted)
+  if (url === '/metrics/weekly' && req.method === 'GET') {
+    if (!isAuthenticated(req)) return jsonResponse(res, 401, { error: 'Not authenticated' });
+    const params = new URL(req.url, 'http://localhost').searchParams;
+    const week = params.get('week') || getCurrentWeek();
+    jsonResponse(res, 200, { week, metrics: weeklyMetrics[week] || {} });
+    return;
+  }
+
+  // POST /metrics/weekly — save manual metrics for a week
+  if (url === '/metrics/weekly' && req.method === 'POST') {
+    if (!isAuthenticated(req)) return jsonResponse(res, 401, { error: 'Not authenticated' });
+    const body = await parseBody(req);
+    const week = body.week || getCurrentWeek();
+    weeklyMetrics[week] = Object.assign(weeklyMetrics[week] || {}, body.metrics || {});
+    saveMetrics();
+    jsonResponse(res, 200, { ok: true, week, metrics: weeklyMetrics[week] });
     return;
   }
 

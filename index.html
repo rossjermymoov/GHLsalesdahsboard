@@ -294,7 +294,56 @@
 
     <!-- KPIs -->
     <div class="kpi-row" id="kpiRow"></div>
-    <div class="kpi-row" id="wowKpis" style="margin-bottom:24px;"></div>
+    <div class="kpi-row" id="wowKpis" style="margin-bottom:8px;"></div>
+    <!-- Weekly Management Metrics (Row 3) -->
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+      <span style="font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Weekly Management Metrics</span>
+      <button class="btn-sm" onclick="openMetricsModal()" style="font-size:11px; padding:4px 12px;">Edit Metrics</button>
+    </div>
+    <div class="kpi-row" id="weeklyMetricsRow" style="margin-bottom:24px;"></div>
+
+    <!-- Weekly Metrics Modal -->
+    <div id="metricsModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:12px; padding:28px; width:420px; max-width:90vw; max-height:85vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+          <h3 style="margin:0; font-size:16px;">Weekly Metrics</h3>
+          <button onclick="closeMetricsModal()" style="background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; padding:4px 8px;">&times;</button>
+        </div>
+        <div style="font-size:12px; color:var(--muted); margin-bottom:16px;">Week: <strong id="metricsWeekLabel"></strong></div>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div style="display:flex; gap:8px;">
+            <div style="flex:1;">
+              <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Talk Time (hours)</label>
+              <input type="number" id="metricTalkHrs" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Talk Time (mins)</label>
+              <input type="number" id="metricTalkMins" min="0" max="59" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Total Number of Calls</label>
+            <input type="number" id="metricTotalCalls" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Clients Went Live Last Week</label>
+            <input type="number" id="metricClientsLive" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Clients Lost</label>
+            <input type="number" id="metricClientsLost" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Client Referrals</label>
+            <input type="number" id="metricReferrals" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:20px;">
+          <button class="btn-primary" style="flex:1;" onclick="saveWeeklyMetrics()">Save</button>
+          <button class="btn-sm" style="flex:1; padding:10px;" onclick="closeMetricsModal()">Cancel</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Funnel -->
     <div class="funnel" id="funnelSection"></div>
@@ -1189,6 +1238,38 @@ function renderDashboard() {
   // ── Active Leads (1st contact attempted and above) ──
   renderActiveLeads(opps, stages);
 
+  // ── GHL Auto Metrics for Weekly Management Row ──
+  var thisWeekStartMgmt = new Date();
+  var dow = thisWeekStartMgmt.getDay() || 7;
+  thisWeekStartMgmt.setDate(thisWeekStartMgmt.getDate() - dow + 1);
+  thisWeekStartMgmt.setHours(0, 0, 0, 0);
+
+  // Build stage name lookup
+  var stageNameLookup = {};
+  stages.forEach(function(s) { stageNameLookup[s.id] = s.name.toLowerCase(); });
+
+  function movedThisWeekToStage(keyword) {
+    return opps.filter(function(o) {
+      var sid = o.pipelineStageId || o.stageId;
+      var name = stageNameLookup[sid] || '';
+      if (name.indexOf(keyword) < 0) return false;
+      var moved = new Date(o.lastStageChangeAt || o.updatedAt || o.createdAt);
+      return moved >= thisWeekStartMgmt;
+    }).length;
+  }
+
+  window._ghlDemosThisWeek = movedThisWeekToStage('demo completed');
+  window._ghlFormsSentThisWeek = movedThisWeekToStage('account form sent');
+  window._ghlFormsCompleted = movedThisWeekToStage('assigned to onboarding');
+  window._ghlQuotesSentThisWeek = movedThisWeekToStage('pricing sent');
+  window._ghlTotalOnboarding = opps.filter(function(o) { return onboardingStageIds[o.pipelineStageId || o.stageId]; }).length;
+
+  // Load manual metrics and render the row
+  fetch('/metrics/weekly?week=' + getCurrentWeekKey()).then(function(r) { return r.json(); }).then(function(data) {
+    currentWeekMetrics = data.metrics || {};
+    renderWeeklyMetricsRow();
+  }).catch(function() { renderWeeklyMetricsRow(); });
+
   // ── Table ──
   const sorted = [...opps].sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 50);
   const stageIdNameMap = {};
@@ -1738,6 +1819,93 @@ function renderWeekOnWeek(opps, stages, onbStageIds, lostStageIds) {
     '<div class="kpi-card"><div class="kpi-label">New Customers Won</div><div class="kpi-value">' + twWon + '</div><div class="kpi-sub">' + deltaHTML(twWon, lwWon) + '</div></div>' +
     '<div class="kpi-card"><div class="kpi-label">Total Pipeline Margin</div><div class="kpi-value">£' + totalPipelineValue.toLocaleString() + '</div><div class="kpi-sub">' + (pipelineNetChange >= 0 ? '<span class="delta-up">&#9650; ' : '<span class="delta-down">&#9660; ') + '£' + Math.abs(pipelineNetChange).toLocaleString() + ' net this week</span></div></div>' +
     '<div class="kpi-card"><div class="kpi-label">Onboarding Margin This Week</div><div class="kpi-value">£' + twWonVal.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twWonVal, lwWonVal, '£') + '</div></div>';
+}
+
+// ── Weekly Management Metrics ──
+function getCurrentWeekKey() {
+  var now = new Date();
+  var jan1 = new Date(now.getFullYear(), 0, 1);
+  var days = Math.floor((now - jan1) / 86400000);
+  var weekNum = Math.ceil((days + jan1.getDay() + 1) / 7);
+  return now.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+}
+
+var currentWeekMetrics = {};
+
+function openMetricsModal() {
+  var week = getCurrentWeekKey();
+  document.getElementById('metricsWeekLabel').textContent = week;
+  document.getElementById('metricsModal').style.display = 'flex';
+  // Load current values
+  fetch('/metrics/weekly?week=' + week).then(function(r) { return r.json(); }).then(function(data) {
+    var m = data.metrics || {};
+    document.getElementById('metricTalkHrs').value = m.talkTimeHrs || '';
+    document.getElementById('metricTalkMins').value = m.talkTimeMins || '';
+    document.getElementById('metricTotalCalls').value = m.totalCalls || '';
+    document.getElementById('metricClientsLive').value = m.clientsLive || '';
+    document.getElementById('metricClientsLost').value = m.clientsLost || '';
+    document.getElementById('metricReferrals').value = m.referrals || '';
+  });
+}
+
+function closeMetricsModal() {
+  document.getElementById('metricsModal').style.display = 'none';
+}
+
+async function saveWeeklyMetrics() {
+  var week = getCurrentWeekKey();
+  var metrics = {
+    talkTimeHrs: parseInt(document.getElementById('metricTalkHrs').value) || 0,
+    talkTimeMins: parseInt(document.getElementById('metricTalkMins').value) || 0,
+    totalCalls: parseInt(document.getElementById('metricTotalCalls').value) || 0,
+    clientsLive: parseInt(document.getElementById('metricClientsLive').value) || 0,
+    clientsLost: parseInt(document.getElementById('metricClientsLost').value) || 0,
+    referrals: parseInt(document.getElementById('metricReferrals').value) || 0
+  };
+  await fetch('/metrics/weekly', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ week: week, metrics: metrics })
+  });
+  currentWeekMetrics = metrics;
+  closeMetricsModal();
+  renderWeeklyMetricsRow();
+}
+
+function renderWeeklyMetricsRow() {
+  var m = currentWeekMetrics;
+  var talkTime = (m.talkTimeHrs || 0) + 'h ' + (m.talkTimeMins || 0) + 'm';
+
+  // Auto metrics from GHL data (calculated during renderDashboard and stored globally)
+  var demosThisWeek = window._ghlDemosThisWeek || 0;
+  var formsSentThisWeek = window._ghlFormsSentThisWeek || 0;
+  var formsCompleted = window._ghlFormsCompleted || 0;
+  var quotesSent = window._ghlQuotesSentThisWeek || 0;
+  var totalOnboarding = window._ghlTotalOnboarding || 0;
+
+  var cards = [
+    { label: 'Talk Time', value: talkTime, manual: true },
+    { label: 'Total Calls', value: (m.totalCalls || 0).toLocaleString(), manual: true },
+    { label: 'Demos This Week', value: demosThisWeek, manual: false },
+    { label: 'Acct Forms Sent', value: formsSentThisWeek, manual: false },
+    { label: 'Acct Forms Completed', value: formsCompleted, manual: false },
+    { label: 'Quotes Sent', value: quotesSent, manual: false },
+    { label: 'In Onboarding', value: totalOnboarding, manual: false },
+    { label: 'Clients Went Live', value: (m.clientsLive || 0).toLocaleString(), manual: true },
+    { label: 'Clients Lost', value: (m.clientsLost || 0).toLocaleString(), manual: true },
+    { label: 'Client Referrals', value: (m.referrals || 0).toLocaleString(), manual: true }
+  ];
+
+  document.getElementById('weeklyMetricsRow').innerHTML = cards.map(function(c) {
+    var tag = c.manual
+      ? '<span style="font-size:9px; color:var(--muted); background:var(--border); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block;">Manual</span>'
+      : '<span style="font-size:9px; color:var(--accent); background:rgba(99,102,241,0.15); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block;">GHL Auto</span>';
+    return '<div class="kpi-card">'
+      + '<div class="kpi-label">' + c.label + '</div>'
+      + '<div class="kpi-value" style="font-size:20px;">' + c.value + '</div>'
+      + '<div class="kpi-sub">' + tag + '</div>'
+      + '</div>';
+  }).join('');
 }
 
 // ── Show admin button if admin, then auto-login check ──
