@@ -984,12 +984,11 @@ function renderDashboard() {
   var checkedCount = opps.length;
   opps.forEach(function(o) {
     var hasBusiness = !!(o.contact && o.contact.companyName) || !!o.companyName || !!o.name;
-    var hasValue = !!o.monetaryValue;
     var hasSource = !!(o.source || o.leadSource);
     var hasOwner = getDealOwner(o) !== '—';
     var hasEmail = !!(o.contact && o.contact.email);
     var hasPhone = !!(o.contact && o.contact.phone);
-    if (hasBusiness && hasValue && hasSource && hasOwner && hasEmail && hasPhone) completeCount++;
+    if (hasBusiness && hasSource && hasOwner && hasEmail && hasPhone) completeCount++;
   });
   var completePct = checkedCount > 0 ? Math.round((completeCount / checkedCount) * 100) : 0;
   var completeColor = completePct >= 90 ? 'var(--green)' : completePct >= 70 ? 'var(--amber)' : 'var(--red)';
@@ -1389,7 +1388,6 @@ function renderActiveLeads(opps, stages) {
       // Track missing fields
       var missing = [];
       if (!o.contact || !o.contact.companyName) missing.push('business name');
-      if (!value) missing.push('value');
       if (!source) missing.push('source');
       if (owner === '—') missing.push('owner');
       if (!email) missing.push('email');
@@ -1417,8 +1415,8 @@ function renderActiveLeads(opps, stages) {
   var missingEl = document.getElementById('activeLeadsMissing');
   if (missingInfo.length > 0) {
     missingEl.style.display = 'block';
-    var fields = ['Business Name', 'Value', 'Source', 'Owner', 'Email', 'Phone'];
-    var fieldKeys = ['business name', 'value', 'source', 'owner', 'email', 'phone'];
+    var fields = ['Business Name', 'Source', 'Owner', 'Email', 'Phone'];
+    var fieldKeys = ['business name', 'source', 'owner', 'email', 'phone'];
     var tick = '<span style="color:var(--green); font-size:16px; font-weight:700;">&#10003;</span>';
     var cross = '<span style="color:var(--red); font-size:16px; font-weight:700;">&#10007;</span>';
     var missingHtml = '<div style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); border-radius:8px; padding:16px; font-size:12px;">';
