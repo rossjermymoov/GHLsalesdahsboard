@@ -890,6 +890,7 @@ function renderDashboard() {
     return allowed;
   });
   const opps = allOpps.filter(function(o) {
+    if (o.status === 'abandoned') return false;
     var sid = o.pipelineStageId || o.stageId;
     return isAllowedStageId(sid);
   });
@@ -1459,7 +1460,7 @@ function getDealOwner(o) {
 function renderStaleDeals(stages) {
   var STALE_DAYS = 7;
   var now = Date.now();
-  var allOpps = allOpportunities.filter(function(o) { return isAllowedStageId(o.pipelineStageId || o.stageId); });
+  var allOpps = allOpportunities.filter(function(o) { return o.status !== 'abandoned' && isAllowedStageId(o.pipelineStageId || o.stageId); });
 
   // Stage keyword groups
   var stageGroups = [
@@ -1594,7 +1595,7 @@ function renderWeekOnWeek(opps, stages) {
   lastWeekEnd.setMilliseconds(-1);
 
   // Use ALL opportunities (not date-filtered) for WoW since we're comparing snapshots
-  var allOpps = allOpportunities.filter(function(o) { return isAllowedStageId(o.pipelineStageId || o.stageId); });
+  var allOpps = allOpportunities.filter(function(o) { return o.status !== 'abandoned' && isAllowedStageId(o.pipelineStageId || o.stageId); });
 
   // Categorise by created date
   var thisWeek = allOpps.filter(function(o) { return new Date(o.createdAt) >= thisWeekStart; });
