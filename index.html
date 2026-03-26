@@ -1700,10 +1700,16 @@ function renderWeekOnWeek(opps, stages, onbStageIds) {
   console.log('Onboarded this week:', twOnboarded.map(function(o) { return getBusinessName(o); }));
   console.log('Onboarded last week:', lwOnboarded.map(function(o) { return getBusinessName(o); }));
   var twWon = twOnboarded.length, lwWon = lwOnboarded.length;
-  var twValue = thisWeek.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
-  var lwValue = lastWeek.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
+  // Total pipeline value = all active deals right now (excludes onboarded + closed lost)
+  var totalPipelineValue = allOpps.filter(function(o) {
+    var sid = o.pipelineStageId || o.stageId;
+    return !onbStageIds[sid];
+  }).reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
+  // Net change this week = value added (new opps) minus value removed (onboarded out)
+  var newOppsValue = thisWeek.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
   var twWonVal = twOnboarded.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
   var lwWonVal = lwOnboarded.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
+  var pipelineNetChange = newOppsValue - twWonVal;
 
   function deltaHTML(current, previous, prefix) {
     prefix = prefix || '';
@@ -1717,7 +1723,7 @@ function renderWeekOnWeek(opps, stages, onbStageIds) {
   document.getElementById('wowKpis').innerHTML =
     '<div class="kpi-card"><div class="kpi-label">New Opps This Week</div><div class="kpi-value">' + twTotal + '</div><div class="kpi-sub">' + deltaHTML(twTotal, lwTotal) + '</div></div>' +
     '<div class="kpi-card"><div class="kpi-label">New Customers Won</div><div class="kpi-value">' + twWon + '</div><div class="kpi-sub">' + deltaHTML(twWon, lwWon) + '</div></div>' +
-    '<div class="kpi-card"><div class="kpi-label">Pipeline Value This Week</div><div class="kpi-value">£' + twValue.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twValue, lwValue, '£') + '</div></div>' +
+    '<div class="kpi-card"><div class="kpi-label">Total Pipeline Value</div><div class="kpi-value">£' + totalPipelineValue.toLocaleString() + '</div><div class="kpi-sub">' + (pipelineNetChange >= 0 ? '<span class="delta-up">&#9650; ' : '<span class="delta-down">&#9660; ') + '£' + Math.abs(pipelineNetChange).toLocaleString() + ' net this week</span></div></div>' +
     '<div class="kpi-card"><div class="kpi-label">Onboarding Revenue This Week</div><div class="kpi-value">£' + twWonVal.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twWonVal, lwWonVal, '£') + '</div></div>';
 }
 
