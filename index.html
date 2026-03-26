@@ -425,8 +425,8 @@
   <div class="main">
     <!-- Weekly Management Metrics -->
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
-      <span style="font-size:14px; font-weight:600; color:var(--text);">Weekly Metrics — <span id="mgmtWeekDisplay"></span></span>
-      <button class="btn-sm" onclick="openMetricsModal()" style="font-size:11px; padding:4px 12px;">Edit Metrics</button>
+      <span style="font-size:14px; font-weight:600; color:var(--text);">Live GHL Metrics — <span id="mgmtWeekDisplay"></span></span>
+      <button class="btn-sm" onclick="openMetricsModal()" style="font-size:11px; padding:4px 12px;">Enter Manual Stats</button>
     </div>
     <div class="kpi-row" id="weeklyMetricsRow" style="margin-bottom:24px;"></div>
 
@@ -464,7 +464,7 @@
     <div id="metricsModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
       <div style="background:var(--card); border:1px solid var(--border); border-radius:12px; padding:28px; width:420px; max-width:90vw; max-height:85vh; overflow-y:auto;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-          <h3 style="margin:0; font-size:16px;">Weekly Metrics</h3>
+          <h3 style="margin:0; font-size:16px;">Enter Manual Stats</h3>
           <button onclick="closeMetricsModal()" style="background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; padding:4px 8px;">&times;</button>
         </div>
         <div style="font-size:12px; color:var(--muted); margin-bottom:16px;">Week: <strong id="metricsWeekLabel"></strong></div>
@@ -890,6 +890,10 @@ function switchTab(tab) {
     fetch('/metrics/weekly?week=' + week).then(function(r) { return r.json(); }).then(function(data) {
       currentWeekMetrics = data.metrics || {};
       renderWeeklyMetricsRow();
+      // If manual stats not entered this week, prompt
+      if (!currentWeekMetrics.totalCalls && !currentWeekMetrics.talkTimeHrs) {
+        openMetricsModal();
+      }
     }).catch(function() { renderWeeklyMetricsRow(); });
     // Load history
     fetch('/metrics/weekly/all').then(function(r) { return r.json(); }).then(function(data) {
@@ -1359,6 +1363,22 @@ function renderDashboard() {
   window._ghlFormsCompleted = movedThisWeekToStage('assigned to onboarding');
   window._ghlQuotesSentThisWeek = movedThisWeekToStage('pricing sent');
   window._ghlTotalOnboarding = opps.filter(function(o) { return onboardingStageIds[o.pipelineStageId || o.stageId]; }).length;
+
+  // Auto-save GHL metrics to this week's record (so history stays up to date)
+  if (isManagerUser || isAdminUser) {
+    var autoMetrics = {
+      quotesSent: window._ghlQuotesSentThisWeek,
+      demos: window._ghlDemosThisWeek,
+      formsSent: window._ghlFormsSentThisWeek,
+      formsCompleted: window._ghlFormsCompleted,
+      totalOnboarding: window._ghlTotalOnboarding
+    };
+    fetch('/metrics/weekly', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ week: getCurrentWeekKey(), metrics: autoMetrics })
+    }).catch(function() {});
+  }
 
   // ── Table ──
   const sorted = [...opps].sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 50);
@@ -1972,11 +1992,17 @@ async function saveWeeklyMetrics() {
   }).catch(function() {});
 }
 
-function renderWeeklyMetricsRow() {
-  var m = currentWeekMetrics;
-  var talkTime = (m.talkTimeHrs || 0) + 'h ' + (m.talkTimeMins || 0) + 'm';
+function cardGlow(value, targetKey) {
+  var t = METRICS_TARGETS[targetKey];
+  if (!t) return '';
+  var hit = t.dir === 'gte' ? value >= t.target : value <= t.target;
+  return hit
+    ? 'box-shadow: 0 0 12px rgba(34,197,94,0.4); border: 1px solid rgba(34,197,94,0.3);'
+    : 'box-shadow: 0 0 12px rgba(239,68,68,0.4); border: 1px solid rgba(239,68,68,0.3);';
+}
 
-  // Auto metrics from GHL data (calculated during renderDashboard and stored globally)
+function renderWeeklyMetricsRow() {
+  // GHL auto metrics only — manual metrics show in history table
   var demosThisWeek = window._ghlDemosThisWeek || 0;
   var formsSentThisWeek = window._ghlFormsSentThisWeek || 0;
   var formsCompleted = window._ghlFormsCompleted || 0;
@@ -1984,26 +2010,24 @@ function renderWeeklyMetricsRow() {
   var totalOnboarding = window._ghlTotalOnboarding || 0;
 
   var cards = [
-    { label: 'Talk Time', value: talkTime, manual: true },
-    { label: 'Total Calls', value: (m.totalCalls || 0).toLocaleString(), manual: true },
-    { label: 'Demos This Week', value: demosThisWeek, manual: false },
-    { label: 'Acct Forms Sent', value: formsSentThisWeek, manual: false },
-    { label: 'Acct Forms Completed', value: formsCompleted, manual: false },
-    { label: 'Quotes Sent', value: quotesSent, manual: false },
-    { label: 'In Onboarding', value: totalOnboarding, manual: false },
-    { label: 'Clients Went Live', value: (m.clientsLive || 0).toLocaleString(), manual: true },
-    { label: 'Clients Lost', value: (m.clientsLost || 0).toLocaleString(), manual: true },
-    { label: 'Client Referrals', value: (m.referrals || 0).toLocaleString(), manual: true }
+    { label: 'Quotes Sent', value: quotesSent, targetKey: 'quotesSent' },
+    { label: 'Demos This Week', value: demosThisWeek, targetKey: 'demos' },
+    { label: 'Acct Forms Sent', value: formsSentThisWeek, targetKey: 'formsSent' },
+    { label: 'Acct Forms Completed', value: formsCompleted, targetKey: 'formsCompleted' },
+    { label: 'In Onboarding', value: totalOnboarding, targetKey: null }
   ];
 
   document.getElementById('weeklyMetricsRow').innerHTML = cards.map(function(c) {
-    var tag = c.manual
-      ? '<span style="font-size:9px; color:var(--muted); background:var(--border); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block;">Manual</span>'
-      : '<span style="font-size:9px; color:var(--accent); background:rgba(99,102,241,0.15); padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block;">GHL Auto</span>';
-    return '<div class="kpi-card">'
+    var glow = c.targetKey ? cardGlow(c.value, c.targetKey) : '';
+    var targetInfo = '';
+    if (c.targetKey && METRICS_TARGETS[c.targetKey]) {
+      var t = METRICS_TARGETS[c.targetKey];
+      targetInfo = '<div class="kpi-sub" style="font-size:10px; color:var(--muted);">Target: ' + t.target + '</div>';
+    }
+    return '<div class="kpi-card" style="' + glow + '">'
       + '<div class="kpi-label">' + c.label + '</div>'
       + '<div class="kpi-value" style="font-size:20px;">' + c.value + '</div>'
-      + '<div class="kpi-sub">' + tag + '</div>'
+      + targetInfo
       + '</div>';
   }).join('');
 }
