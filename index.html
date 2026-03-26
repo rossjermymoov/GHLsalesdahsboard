@@ -1285,17 +1285,21 @@ function formatMonth(ym) {
 // ── Onboarded by Lead Source ──
 function renderWinsBySource(opps, onbStageIds, lostStageIds) {
   var sourceData = {};
+  // Map to merge case variants (e.g. "Sales Team" and "Sales team")
+  var sourceDisplayName = {};
   opps.forEach(function(o) {
-    var src = o.source || o.leadSource || 'Unknown';
-    if (!sourceData[src]) sourceData[src] = { wins: 0, losses: 0, total: 0, wonValue: 0 };
-    sourceData[src].total++;
+    var rawSrc = o.source || o.leadSource || 'Unknown';
+    var key = rawSrc.toLowerCase().trim();
+    if (!sourceDisplayName[key]) sourceDisplayName[key] = rawSrc;
+    if (!sourceData[key]) sourceData[key] = { wins: 0, losses: 0, total: 0, wonValue: 0 };
+    sourceData[key].total++;
     var sid = o.pipelineStageId || o.stageId;
     if (onbStageIds[sid]) {
-      sourceData[src].wins++;
-      sourceData[src].wonValue += (o.monetaryValue || 0);
+      sourceData[key].wins++;
+      sourceData[key].wonValue += (o.monetaryValue || 0);
     }
     if (lostStageIds[sid]) {
-      sourceData[src].losses++;
+      sourceData[key].losses++;
     }
   });
 
@@ -1314,11 +1318,11 @@ function renderWinsBySource(opps, onbStageIds, lostStageIds) {
 
   tbody.innerHTML = sorted.map(function(src) {
     var d = sourceData[src];
-    var decided = d.wins + d.losses;
-    var winRate = decided > 0 ? (d.wins / decided * 100) : 0;
+    var winRate = d.total > 0 ? (d.wins / d.total * 100) : 0;
     var avgDeal = d.wins > 0 ? d.wonValue / d.wins : 0;
     var revPct = totalWonRevenue > 0 ? (d.wonValue / totalWonRevenue * 100) : 0;
-    var sourceColor = getSourceColor(src);
+    var displayName = sourceDisplayName[src] || src;
+    var sourceColor = getSourceColor(displayName);
     var winRateColor = winRate >= 30 ? 'var(--green)' : winRate >= 15 ? 'var(--amber)' : 'var(--muted)';
 
     // Revenue share bar
@@ -1329,7 +1333,7 @@ function renderWinsBySource(opps, onbStageIds, lostStageIds) {
       + '<span>' + revPct.toFixed(1) + '%</span></div>';
 
     return '<tr>'
-      + '<td><span class="source-tag" style="background:' + sourceColor.bg + '; color:' + sourceColor.text + '; border:1px solid ' + sourceColor.border + '">' + esc(src) + '</span></td>'
+      + '<td><span class="source-tag" style="background:' + sourceColor.bg + '; color:' + sourceColor.text + '; border:1px solid ' + sourceColor.border + '">' + esc(displayName) + '</span></td>'
       + '<td style="font-weight:700;">' + d.wins + '</td>'
       + '<td>' + d.total + '</td>'
       + '<td style="color:' + winRateColor + '; font-weight:600;">' + winRate.toFixed(1) + '%</td>'
