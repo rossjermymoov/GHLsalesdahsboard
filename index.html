@@ -1689,8 +1689,19 @@ function renderWeekOnWeek(opps, stages, onbStageIds) {
 
   // WoW KPI cards with deltas
   var twTotal = thisWeek.length, lwTotal = lastWeek.length;
-  var twOnboarded = thisWeek.filter(function(o) { return onbStageIds[o.pipelineStageId || o.stageId]; });
-  var lwOnboarded = lastWeek.filter(function(o) { return onbStageIds[o.pipelineStageId || o.stageId]; });
+  // Onboarded this/last week = in onboarding stage AND lastStageChangeAt falls in that week
+  var twOnboarded = allOpps.filter(function(o) {
+    if (!onbStageIds[o.pipelineStageId || o.stageId]) return false;
+    var moved = new Date(o.lastStageChangeAt || o.updatedAt || o.createdAt);
+    return moved >= thisWeekStart;
+  });
+  var lwOnboarded = allOpps.filter(function(o) {
+    if (!onbStageIds[o.pipelineStageId || o.stageId]) return false;
+    var moved = new Date(o.lastStageChangeAt || o.updatedAt || o.createdAt);
+    return moved >= lastWeekStart && moved < thisWeekStart;
+  });
+  console.log('Onboarded this week:', twOnboarded.map(function(o) { return getBusinessName(o); }));
+  console.log('Onboarded last week:', lwOnboarded.map(function(o) { return getBusinessName(o); }));
   var twWon = twOnboarded.length, lwWon = lwOnboarded.length;
   var twValue = thisWeek.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
   var lwValue = lastWeek.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
