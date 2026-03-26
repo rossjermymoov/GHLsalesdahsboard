@@ -832,7 +832,8 @@ function renderDashboard() {
   const totalValue = opps.reduce((s, o) => s + (o.monetaryValue || 0), 0);
   const wonOpps = opps.filter(o => o.status === 'won');
   const lostOpps = opps.filter(o => o.status === 'lost');
-  const openOpps = opps.filter(o => o.status === 'open');
+  const abandonedOpps = opps.filter(o => o.status === 'abandoned');
+  const openOpps = opps.filter(o => o.status !== 'won' && o.status !== 'lost' && o.status !== 'abandoned');
   const wonValue = wonOpps.reduce((s, o) => s + (o.monetaryValue || 0), 0);
   const openValue = openOpps.reduce((s, o) => s + (o.monetaryValue || 0), 0);
   const winRate = totalOpps > 0 ? ((wonOpps.length / (wonOpps.length + lostOpps.length)) * 100) : 0;
@@ -854,7 +855,7 @@ function renderDashboard() {
   var completeColor = completePct >= 90 ? 'var(--green)' : completePct >= 70 ? 'var(--amber)' : 'var(--red)';
 
   const kpis = [
-    { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: openOpps.length + ' open' },
+    { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: openOpps.length + ' open / ' + wonOpps.length + ' won / ' + lostOpps.length + ' lost' + (abandonedOpps.length > 0 ? ' / ' + abandonedOpps.length + ' abandoned' : '') },
     { label: 'Total Pipeline Value', value: '£' + totalValue.toLocaleString(), sub: '£' + openValue.toLocaleString() + ' open' },
     { label: 'Won Revenue', value: '£' + wonValue.toLocaleString(), sub: wonOpps.length + ' deals closed' },
     { label: 'Win Rate', value: (winRate || 0).toFixed(1) + '%', sub: wonOpps.length + 'W / ' + lostOpps.length + 'L' },
@@ -950,7 +951,7 @@ function renderDashboard() {
   });
 
   // 2. Status breakdown (doughnut) — compact
-  var statusCounts = { open: openOpps.length, won: wonOpps.length, lost: lostOpps.length, abandoned: opps.filter(function(o) { return o.status === 'abandoned'; }).length };
+  var statusCounts = { open: openOpps.length, won: wonOpps.length, lost: lostOpps.length, abandoned: abandonedOpps.length };
   charts.status = new Chart(document.getElementById('statusChart'), {
     type: 'doughnut',
     data: {
