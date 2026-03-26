@@ -841,21 +841,41 @@ function renderDashboard() {
   const winRate = totalOpps > 0 ? ((wonOpps.length / (wonOpps.length + lostOpps.length)) * 100) : 0;
   const avgDealValue = wonOpps.length > 0 ? wonValue / wonOpps.length : 0;
 
+  // Data completeness score
+  var completeCount = 0;
+  var checkedCount = openOpps.length;
+  openOpps.forEach(function(o) {
+    var hasBusiness = !!(o.contact && o.contact.companyName) || !!o.companyName || !!o.name;
+    var hasValue = !!o.monetaryValue;
+    var hasSource = !!(o.source || o.leadSource);
+    var hasOwner = getDealOwner(o) !== '—';
+    var hasEmail = !!(o.contact && o.contact.email);
+    var hasPhone = !!(o.contact && o.contact.phone);
+    if (hasBusiness && hasValue && hasSource && hasOwner && hasEmail && hasPhone) completeCount++;
+  });
+  var completePct = checkedCount > 0 ? Math.round((completeCount / checkedCount) * 100) : 0;
+  var completeColor = completePct >= 90 ? 'var(--green)' : completePct >= 70 ? 'var(--amber)' : 'var(--red)';
+
   const kpis = [
-    { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: `${openOpps.length} open` },
-    { label: 'Total Pipeline Value', value: '£' + totalValue.toLocaleString(), sub: `£${openValue.toLocaleString()} open` },
-    { label: 'Won Revenue', value: '£' + wonValue.toLocaleString(), sub: `${wonOpps.length} deals closed` },
-    { label: 'Win Rate', value: (winRate || 0).toFixed(1) + '%', sub: `${wonOpps.length}W / ${lostOpps.length}L` },
-    { label: 'Avg Deal Size (Won)', value: '£' + avgDealValue.toLocaleString(undefined, {maximumFractionDigits:0}), sub: `from ${wonOpps.length} deals` },
+    { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: openOpps.length + ' open' },
+    { label: 'Total Pipeline Value', value: '£' + totalValue.toLocaleString(), sub: '£' + openValue.toLocaleString() + ' open' },
+    { label: 'Won Revenue', value: '£' + wonValue.toLocaleString(), sub: wonOpps.length + ' deals closed' },
+    { label: 'Win Rate', value: (winRate || 0).toFixed(1) + '%', sub: wonOpps.length + 'W / ' + lostOpps.length + 'L' },
+    { label: 'Avg Deal Size (Won)', value: '£' + avgDealValue.toLocaleString(undefined, {maximumFractionDigits:0}), sub: 'from ' + wonOpps.length + ' deals' },
   ];
 
-  document.getElementById('kpiRow').innerHTML = kpis.map(k => `
-    <div class="kpi-card">
-      <div class="kpi-label">${k.label}</div>
-      <div class="kpi-value">${k.value}</div>
-      <div class="kpi-sub">${k.sub}</div>
-    </div>
-  `).join('');
+  document.getElementById('kpiRow').innerHTML = kpis.map(function(k) {
+    return '<div class="kpi-card">'
+      + '<div class="kpi-label">' + k.label + '</div>'
+      + '<div class="kpi-value">' + k.value + '</div>'
+      + '<div class="kpi-sub">' + k.sub + '</div>'
+      + '</div>';
+  }).join('')
+    + '<div class="kpi-card" style="border-color:' + completeColor + ';">'
+    + '<div class="kpi-label">Data Completeness</div>'
+    + '<div class="kpi-value" style="color:' + completeColor + ';">' + completePct + '%</div>'
+    + '<div class="kpi-sub">' + completeCount + ' of ' + checkedCount + ' open leads fully complete</div>'
+    + '</div>';
 
   // ── Funnel ──
   const stageMap = {};
