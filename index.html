@@ -834,23 +834,66 @@ function getFilteredOpps() {
   });
 }
 
+// ── Allowed pipeline stages (lowercase for matching) ──
+var ALLOWED_STAGES = [
+  'long term revisit',
+  'inbound/new lead',
+  '1st contact attempted',
+  'further contact attempted',
+  'qualified lead',
+  'pricing request',
+  'pricing sent',
+  'follow up',
+  'active follow up',
+  'demo booked',
+  'demo completed',
+  'account form sent',
+  'assigned to onboarding',
+  'go live date set',
+  'closed lost',
+  'closed won'
+];
+
+function isAllowedStage(stageName) {
+  if (!stageName) return false;
+  var lower = stageName.toLowerCase();
+  for (var i = 0; i < ALLOWED_STAGES.length; i++) {
+    if (lower === ALLOWED_STAGES[i] || lower.indexOf(ALLOWED_STAGES[i]) >= 0) return true;
+  }
+  return false;
+}
+
+// Global set of allowed stage IDs — built when dashboard renders
+var ALLOWED_STAGE_IDS = {};
+
+function isAllowedStageId(sid) {
+  return !!ALLOWED_STAGE_IDS[sid];
+}
+
 // ── Render Dashboard ──
 function renderDashboard() {
   // Reset source colours so they stay consistent across re-renders
   SOURCE_COLOR_CACHE = {};
   SOURCE_COLOR_INDEX = 0;
 
-  const opps = getFilteredOpps();
+  const allOpps = getFilteredOpps();
   const pipeline = allPipelines.find(p => p.id === currentPipelineId);
-  const stages = pipeline ? (pipeline.stages || []) : [];
+  const allStages = pipeline ? (pipeline.stages || []) : [];
+
+  // Filter to allowed stages only
+  ALLOWED_STAGE_IDS = {};
+  const stages = allStages.filter(function(s) {
+    var allowed = isAllowedStage(s.name);
+    if (allowed) ALLOWED_STAGE_IDS[s.id] = true;
+    return allowed;
+  });
+  const opps = allOpps.filter(function(o) {
+    var sid = o.pipelineStageId || o.stageId;
+    return isAllowedStageId(sid);
+  });
 
   // Timestamp
   document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
-
-  // ── Debug: log all unique status values ──
-  var statusBreakdown = {};
-  opps.forEach(function(o) { var s = o.status || '(null/undefined)'; statusBreakdown[s] = (statusBreakdown[s] || 0) + 1; });
-  console.log('GHL Status Breakdown:', JSON.stringify(statusBreakdown));
 
   // ── KPIs ──
   const totalOpps = opps.length;
@@ -1373,7 +1416,7 @@ function getDealOwner(o) {
 function renderStaleDeals(stages) {
   var STALE_DAYS = 7;
   var now = Date.now();
-  var allOpps = allOpportunities;
+  var allOpps = allOpportunities.filter(function(o) { return isAllowedStageId(o.pipelineStageId || o.stageId); });
 
   // Stage keyword groups
   var stageGroups = [
@@ -1508,7 +1551,7 @@ function renderWeekOnWeek(opps, stages) {
   lastWeekEnd.setMilliseconds(-1);
 
   // Use ALL opportunities (not date-filtered) for WoW since we're comparing snapshots
-  var allOpps = allOpportunities;
+  var allOpps = allOpportunities.filter(function(o) { return isAllowedStageId(o.pipelineStageId || o.stageId); });
 
   // Categorise by created date
   var thisWeek = allOpps.filter(function(o) { return new Date(o.createdAt) >= thisWeekStart; });
