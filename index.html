@@ -891,7 +891,7 @@ function switchTab(tab) {
     // Update week display and load metrics
     var week = getCurrentWeekKey();
     var weekEl = document.getElementById('mgmtWeekDisplay');
-    if (weekEl) weekEl.textContent = week;
+    if (weekEl) weekEl.textContent = weekKeyToWC(week);
     fetch('/metrics/weekly?week=' + week).then(function(r) { return r.json(); }).then(function(data) {
       currentWeekMetrics = data.metrics || {};
       renderWeeklyMetricsRow();
@@ -1949,7 +1949,7 @@ var currentWeekMetrics = {};
 
 function openMetricsModal() {
   var week = getCurrentWeekKey();
-  document.getElementById('metricsWeekLabel').textContent = week;
+  document.getElementById('metricsWeekLabel').textContent = weekKeyToWC(week);
   document.getElementById('metricsModal').style.display = 'flex';
   // Load current values
   fetch('/metrics/weekly?week=' + week).then(function(r) { return r.json(); }).then(function(data) {
