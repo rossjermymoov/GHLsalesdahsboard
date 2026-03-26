@@ -894,21 +894,46 @@ function renderDashboard() {
     return isAllowedStageId(sid);
   });
 
-  // Log excluded opportunities so we can see what stages they're in
-  var excludedStages = {};
+  // ── Data Audit ──
+  console.log('=== PIPELINE DATA AUDIT ===');
+  console.log('Total opps from API (before filtering):', allOpps.length);
+  console.log('Total opps after stage filter:', opps.length);
+  console.log('All stages in pipeline:', allStages.map(function(s) { return s.name; }).join(', '));
+  console.log('Allowed stages:', stages.map(function(s) { return s.name; }).join(', '));
+
+  // Count per stage (from API data, before filtering)
+  var stageAudit = {};
+  var stageStatusAudit = {};
+  allStages.forEach(function(s) { stageAudit[s.name] = { count: 0, allowed: !!ALLOWED_STAGE_IDS[s.id], businesses: [] }; });
   allOpps.forEach(function(o) {
     var sid = o.pipelineStageId || o.stageId;
-    if (!isAllowedStageId(sid)) {
-      var name = getBusinessName(o);
-      var sName = allStages.find(function(s) { return s.id === sid; });
-      var stageName = sName ? sName.name : sid;
-      if (!excludedStages[stageName]) excludedStages[stageName] = [];
-      excludedStages[stageName].push(name);
-    }
+    var s = allStages.find(function(st) { return st.id === sid; });
+    var sName = s ? s.name : '(unknown: ' + sid + ')';
+    if (!stageAudit[sName]) stageAudit[sName] = { count: 0, allowed: false, businesses: [] };
+    stageAudit[sName].count++;
+    stageAudit[sName].businesses.push(getBusinessName(o) + ' [status=' + (o.status || 'null') + ']');
   });
-  if (Object.keys(excludedStages).length > 0) {
-    console.log('Excluded opportunities by stage:', JSON.stringify(excludedStages, null, 2));
+  console.log('Per-stage breakdown (ALL from API):');
+  Object.keys(stageAudit).forEach(function(name) {
+    var d = stageAudit[name];
+    console.log('  ' + (d.allowed ? '✓' : '✗') + ' ' + name + ': ' + d.count + ' opps');
+  });
+
+  // Status breakdown
+  var statusAudit = {};
+  allOpps.forEach(function(o) { var s = o.status || '(null)'; statusAudit[s] = (statusAudit[s] || 0) + 1; });
+  console.log('Status breakdown (all opps):', JSON.stringify(statusAudit));
+
+  // Long Term Revisit detail
+  var ltrStage = allStages.find(function(s) { return s.name.toLowerCase().indexOf('long term') >= 0; });
+  if (ltrStage) {
+    var ltrOpps = allOpps.filter(function(o) { return (o.pipelineStageId || o.stageId) === ltrStage.id; });
+    console.log('Long Term Revisit: ' + ltrOpps.length + ' opps, stage ID: ' + ltrStage.id);
+    ltrOpps.forEach(function(o) {
+      console.log('  - ' + getBusinessName(o) + ' | status=' + (o.status || 'null') + ' | value=' + (o.monetaryValue || 0));
+    });
   }
+  console.log('=== END AUDIT ===');
 
   // Timestamp
   document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
