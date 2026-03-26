@@ -847,6 +847,11 @@ function renderDashboard() {
   // Timestamp
   document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
 
+  // ── Debug: log all unique status values ──
+  var statusBreakdown = {};
+  opps.forEach(function(o) { var s = o.status || '(null/undefined)'; statusBreakdown[s] = (statusBreakdown[s] || 0) + 1; });
+  console.log('GHL Status Breakdown:', JSON.stringify(statusBreakdown));
+
   // ── KPIs ──
   const totalOpps = opps.length;
   const totalValue = opps.reduce((s, o) => s + (o.monetaryValue || 0), 0);
