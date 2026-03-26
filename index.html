@@ -302,7 +302,7 @@
     <!-- Charts -->
     <!-- Deal values — full width, prominent -->
     <div class="chart-card" style="margin-bottom:16px;">
-      <h3>Deal Values by Stage</h3>
+      <h3>Deal Margin by Stage</h3>
       <canvas id="stageValueChart" style="max-height:350px;"></canvas>
     </div>
 
@@ -336,9 +336,9 @@
               <th>Onboarded</th>
               <th>Total Leads</th>
               <th>Conversion Rate</th>
-              <th>Onboarding Revenue</th>
-              <th>Avg Deal Value</th>
-              <th>% of Total Revenue</th>
+              <th>Onboarding Margin</th>
+              <th>Avg Deal Margin</th>
+              <th>% of Total Margin</th>
             </tr>
           </thead>
           <tbody id="winsBySourceBody"></tbody>
@@ -995,10 +995,10 @@ function renderDashboard() {
 
   const kpis = [
     { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: pipelineOpps.length + ' in pipeline / ' + onboardedOpps.length + ' onboarding' },
-    { label: 'Pipeline Value', value: '£' + pipelineValue.toLocaleString(), sub: totalOpps + ' active leads' },
-    { label: 'Onboarding Revenue', value: '£' + onboardedValue.toLocaleString(), sub: onboardedOpps.length + ' moved to onboarding' },
+    { label: 'Pipeline Margin', value: '£' + pipelineValue.toLocaleString(), sub: totalOpps + ' active leads' },
+    { label: 'Onboarding Margin', value: '£' + onboardedValue.toLocaleString(), sub: onboardedOpps.length + ' moved to onboarding' },
     { label: 'Win Rate', value: conversionRate.toFixed(1) + '%', sub: onboardedOpps.length + ' won vs ' + closedLostOpps.length + ' lost' },
-    { label: 'Avg Deal Size', value: '£' + avgDealValue.toLocaleString(undefined, {maximumFractionDigits:0}), sub: 'from ' + onboardedOpps.length + ' onboarded deals' },
+    { label: 'Avg Deal Margin', value: '£' + avgDealValue.toLocaleString(undefined, {maximumFractionDigits:0}), sub: 'from ' + onboardedOpps.length + ' onboarded deals' },
   ];
 
   document.getElementById('kpiRow').innerHTML = kpis.map(function(k) {
@@ -1079,7 +1079,7 @@ function renderDashboard() {
     data: {
       labels: filteredLabels,
       datasets: [{
-        label: 'Deal Value (£)',
+        label: 'Deal Margin (£)',
         data: filteredValues,
         backgroundColor: filteredColors,
         borderRadius: 6,
@@ -1303,9 +1303,9 @@ function renderWinsBySource(opps, onbStageIds, lostStageIds) {
     }
   });
 
-  var totalWonRevenue = Object.keys(sourceData).reduce(function(s, k) { return s + sourceData[k].wonValue; }, 0);
+  var totalWonMargin = Object.keys(sourceData).reduce(function(s, k) { return s + sourceData[k].wonValue; }, 0);
 
-  // Sort by won revenue descending
+  // Sort by won margin descending
   var sorted = Object.keys(sourceData).sort(function(a, b) {
     return sourceData[b].wonValue - sourceData[a].wonValue;
   });
@@ -1320,12 +1320,12 @@ function renderWinsBySource(opps, onbStageIds, lostStageIds) {
     var d = sourceData[src];
     var winRate = d.total > 0 ? (d.wins / d.total * 100) : 0;
     var avgDeal = d.wins > 0 ? d.wonValue / d.wins : 0;
-    var revPct = totalWonRevenue > 0 ? (d.wonValue / totalWonRevenue * 100) : 0;
+    var revPct = totalWonMargin > 0 ? (d.wonValue / totalWonMargin * 100) : 0;
     var displayName = sourceDisplayName[src] || src;
     var sourceColor = getSourceColor(displayName);
     var winRateColor = winRate >= 30 ? 'var(--green)' : winRate >= 15 ? 'var(--amber)' : 'var(--muted)';
 
-    // Revenue share bar
+    // Margin share bar
     var barWidth = Math.max(2, revPct);
     var bar = '<div style="display:flex; align-items:center; gap:8px;">'
       + '<div style="width:60px; background:var(--border); border-radius:4px; height:8px; overflow:hidden;">'
@@ -1717,7 +1717,7 @@ function renderWeekOnWeek(opps, stages, onbStageIds, lostStageIds) {
   pipelineDeals.forEach(function(o) {
     console.log('  ' + getBusinessName(o) + ': £' + (o.monetaryValue || 0));
   });
-  console.log('Total pipeline value: £' + totalPipelineValue);
+  console.log('Total pipeline margin: £' + totalPipelineValue);
   // Net change this week = value added (new opps) minus value removed (onboarded out)
   var newOppsValue = thisWeek.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
   var twWonVal = twOnboarded.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
@@ -1736,8 +1736,8 @@ function renderWeekOnWeek(opps, stages, onbStageIds, lostStageIds) {
   document.getElementById('wowKpis').innerHTML =
     '<div class="kpi-card"><div class="kpi-label">New Opps This Week</div><div class="kpi-value">' + twTotal + '</div><div class="kpi-sub">' + deltaHTML(twTotal, lwTotal) + '</div></div>' +
     '<div class="kpi-card"><div class="kpi-label">New Customers Won</div><div class="kpi-value">' + twWon + '</div><div class="kpi-sub">' + deltaHTML(twWon, lwWon) + '</div></div>' +
-    '<div class="kpi-card"><div class="kpi-label">Total Pipeline Value</div><div class="kpi-value">£' + totalPipelineValue.toLocaleString() + '</div><div class="kpi-sub">' + (pipelineNetChange >= 0 ? '<span class="delta-up">&#9650; ' : '<span class="delta-down">&#9660; ') + '£' + Math.abs(pipelineNetChange).toLocaleString() + ' net this week</span></div></div>' +
-    '<div class="kpi-card"><div class="kpi-label">Onboarding Revenue This Week</div><div class="kpi-value">£' + twWonVal.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twWonVal, lwWonVal, '£') + '</div></div>';
+    '<div class="kpi-card"><div class="kpi-label">Total Pipeline Margin</div><div class="kpi-value">£' + totalPipelineValue.toLocaleString() + '</div><div class="kpi-sub">' + (pipelineNetChange >= 0 ? '<span class="delta-up">&#9650; ' : '<span class="delta-down">&#9660; ') + '£' + Math.abs(pipelineNetChange).toLocaleString() + ' net this week</span></div></div>' +
+    '<div class="kpi-card"><div class="kpi-label">Onboarding Margin This Week</div><div class="kpi-value">£' + twWonVal.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twWonVal, lwWonVal, '£') + '</div></div>';
 }
 
 // ── Show admin button if admin, then auto-login check ──
