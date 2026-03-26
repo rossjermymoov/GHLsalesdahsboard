@@ -892,6 +892,22 @@ function renderDashboard() {
     return isAllowedStageId(sid);
   });
 
+  // Log excluded opportunities so we can see what stages they're in
+  var excludedStages = {};
+  allOpps.forEach(function(o) {
+    var sid = o.pipelineStageId || o.stageId;
+    if (!isAllowedStageId(sid)) {
+      var name = getBusinessName(o);
+      var sName = allStages.find(function(s) { return s.id === sid; });
+      var stageName = sName ? sName.name : sid;
+      if (!excludedStages[stageName]) excludedStages[stageName] = [];
+      excludedStages[stageName].push(name);
+    }
+  });
+  if (Object.keys(excludedStages).length > 0) {
+    console.log('Excluded opportunities by stage:', JSON.stringify(excludedStages, null, 2));
+  }
+
   // Timestamp
   document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
 
