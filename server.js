@@ -354,6 +354,13 @@ const server = http.createServer(async (req, res) => {
   // WEEKLY METRICS ENDPOINTS
   // ════════════════════════════════════════
 
+  // GET /metrics/weekly/all — return all saved weekly metrics
+  if (url === '/metrics/weekly/all' && req.method === 'GET') {
+    if (!isManager(req)) return jsonResponse(res, 401, { error: 'Manager access required' });
+    jsonResponse(res, 200, { metrics: weeklyMetrics });
+    return;
+  }
+
   // GET /metrics/weekly?week=2026-W13  (returns metrics for that week, or current week if omitted)
   if (url === '/metrics/weekly' && req.method === 'GET') {
     if (!isManager(req)) return jsonResponse(res, 401, { error: 'Manager access required' });

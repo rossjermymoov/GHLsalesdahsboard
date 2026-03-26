@@ -430,6 +430,36 @@
     </div>
     <div class="kpi-row" id="weeklyMetricsRow" style="margin-bottom:24px;"></div>
 
+    <!-- Metrics History -->
+    <div class="table-card" style="margin-bottom:24px;">
+      <h3>Metrics History</h3>
+      <div style="overflow-x:auto">
+        <table style="width:100%; font-size:12px;">
+          <thead>
+            <tr>
+              <th>Week</th>
+              <th>Calls</th>
+              <th>Talk Time</th>
+              <th>Quotes Sent</th>
+              <th>Demos</th>
+              <th>Acct Forms Sent</th>
+              <th>Acct Forms Completed</th>
+              <th>Clients Live</th>
+              <th>Clients Lost</th>
+              <th>Referrals</th>
+              <th>In Onboarding</th>
+            </tr>
+          </thead>
+          <tbody id="metricsHistoryBody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px; font-size:11px; color:var(--muted);">
+        <span style="color:var(--green);">&#9679;</span> On/above target &nbsp;
+        <span style="color:var(--red);">&#9679;</span> Below target &nbsp;
+        <span style="color:var(--muted);">&#9679;</span> No target
+      </div>
+    </div>
+
     <!-- Weekly Metrics Modal -->
     <div id="metricsModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
       <div style="background:var(--card); border:1px solid var(--border); border-radius:12px; padding:28px; width:420px; max-width:90vw; max-height:85vh; overflow-y:auto;">
@@ -861,6 +891,10 @@ function switchTab(tab) {
       currentWeekMetrics = data.metrics || {};
       renderWeeklyMetricsRow();
     }).catch(function() { renderWeeklyMetricsRow(); });
+    // Load history
+    fetch('/metrics/weekly/all').then(function(r) { return r.json(); }).then(function(data) {
+      renderMetricsHistory(data.metrics || {});
+    }).catch(function() {});
   } else {
     document.getElementById('managementPanel').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
@@ -1916,7 +1950,13 @@ async function saveWeeklyMetrics() {
     totalCalls: parseInt(document.getElementById('metricTotalCalls').value) || 0,
     clientsLive: parseInt(document.getElementById('metricClientsLive').value) || 0,
     clientsLost: parseInt(document.getElementById('metricClientsLost').value) || 0,
-    referrals: parseInt(document.getElementById('metricReferrals').value) || 0
+    referrals: parseInt(document.getElementById('metricReferrals').value) || 0,
+    // Also persist GHL auto-metrics so they appear in history
+    quotesSent: window._ghlQuotesSentThisWeek || 0,
+    demos: window._ghlDemosThisWeek || 0,
+    formsSent: window._ghlFormsSentThisWeek || 0,
+    formsCompleted: window._ghlFormsCompleted || 0,
+    totalOnboarding: window._ghlTotalOnboarding || 0
   };
   await fetch('/metrics/weekly', {
     method: 'POST',
@@ -1926,6 +1966,10 @@ async function saveWeeklyMetrics() {
   currentWeekMetrics = metrics;
   closeMetricsModal();
   renderWeeklyMetricsRow();
+  // Refresh history table
+  fetch('/metrics/weekly/all').then(function(r) { return r.json(); }).then(function(data) {
+    renderMetricsHistory(data.metrics || {});
+  }).catch(function() {});
 }
 
 function renderWeeklyMetricsRow() {
@@ -1961,6 +2005,75 @@ function renderWeeklyMetricsRow() {
       + '<div class="kpi-value" style="font-size:20px;">' + c.value + '</div>'
       + '<div class="kpi-sub">' + tag + '</div>'
       + '</div>';
+  }).join('');
+}
+
+// ── Metrics History ──
+// Targets: value = target number, direction: 'gte' = green when >= target, 'lte' = green when <= target
+var METRICS_TARGETS = {
+  totalCalls:       { target: 800, dir: 'gte' },
+  talkTimeMins:     { target: 1200, dir: 'gte' }, // 20h = 1200 mins, we'll compare total minutes
+  quotesSent:       { target: 20, dir: 'gte' },
+  demos:            { target: 15, dir: 'gte' },
+  formsSent:        { target: 8, dir: 'gte' },
+  formsCompleted:   { target: 4, dir: 'gte' },
+  clientsLive:      { target: 3, dir: 'gte' },
+  clientsLost:      { target: 1, dir: 'lte' },  // green if at or below 1
+  referrals:        { target: 2, dir: 'gte' }
+};
+
+function weekKeyToWC(weekKey) {
+  // Convert "2026-W13" to "w/c 23/03/2026" (Monday of that ISO week)
+  var parts = weekKey.match(/(\d{4})-W(\d+)/);
+  if (!parts) return weekKey;
+  var year = parseInt(parts[1]);
+  var week = parseInt(parts[2]);
+  // Jan 4 is always in ISO week 1
+  var jan4 = new Date(year, 0, 4);
+  var dayOfWeek = jan4.getDay() || 7; // Mon=1
+  var monday = new Date(jan4);
+  monday.setDate(jan4.getDate() - dayOfWeek + 1 + (week - 1) * 7);
+  var dd = String(monday.getDate()).padStart(2, '0');
+  var mm = String(monday.getMonth() + 1).padStart(2, '0');
+  return 'w/c ' + dd + '/' + mm + '/' + monday.getFullYear();
+}
+
+function targetColor(value, key) {
+  var t = METRICS_TARGETS[key];
+  if (!t) return '';
+  if (t.dir === 'gte') {
+    return value >= t.target ? 'color:var(--green); font-weight:700;' : 'color:var(--red); font-weight:700;';
+  } else {
+    return value <= t.target ? 'color:var(--green); font-weight:700;' : 'color:var(--red); font-weight:700;';
+  }
+}
+
+function renderMetricsHistory(allMetrics) {
+  var tbody = document.getElementById('metricsHistoryBody');
+  if (!tbody) return;
+  var weeks = Object.keys(allMetrics).sort().reverse();
+  if (weeks.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:var(--muted); padding:24px;">No history yet. Enter metrics to start tracking.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = weeks.map(function(wk) {
+    var m = allMetrics[wk];
+    var talkTotalMins = ((m.talkTimeHrs || 0) * 60) + (m.talkTimeMins || 0);
+    var talkDisplay = (m.talkTimeHrs || 0) + 'h ' + (m.talkTimeMins || 0) + 'm';
+
+    return '<tr>'
+      + '<td style="white-space:nowrap; font-weight:600;">' + weekKeyToWC(wk) + '</td>'
+      + '<td style="text-align:center; ' + targetColor(m.totalCalls || 0, 'totalCalls') + '">' + (m.totalCalls || 0) + '</td>'
+      + '<td style="text-align:center; ' + targetColor(talkTotalMins, 'talkTimeMins') + '">' + talkDisplay + '</td>'
+      + '<td style="text-align:center; ' + targetColor(m.quotesSent || 0, 'quotesSent') + '">' + (m.quotesSent || 0) + '</td>'
+      + '<td style="text-align:center; ' + targetColor(m.demos || 0, 'demos') + '">' + (m.demos || 0) + '</td>'
+      + '<td style="text-align:center; ' + targetColor(m.formsSent || 0, 'formsSent') + '">' + (m.formsSent || 0) + '</td>'
+      + '<td style="text-align:center; ' + targetColor(m.formsCompleted || 0, 'formsCompleted') + '">' + (m.formsCompleted || 0) + '</td>'
+      + '<td style="text-align:center; ' + targetColor(m.clientsLive || 0, 'clientsLive') + '">' + (m.clientsLive || 0) + '</td>'
+      + '<td style="text-align:center; ' + targetColor(m.clientsLost || 0, 'clientsLost') + '">' + (m.clientsLost || 0) + '</td>'
+      + '<td style="text-align:center; ' + targetColor(m.referrals || 0, 'referrals') + '">' + (m.referrals || 0) + '</td>'
+      + '<td style="text-align:center; color:var(--muted);">' + (m.totalOnboarding || 0) + '</td>'
+      + '</tr>';
   }).join('');
 }
 
