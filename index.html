@@ -962,13 +962,22 @@ function renderDashboard() {
     }
   });
 
+  // Detect "Closed Lost" stage IDs
+  var closedLostStageIds = {};
+  stages.forEach(function(s) {
+    if (s.name.toLowerCase().indexOf('closed lost') >= 0) { closedLostStageIds[s.id] = true; }
+  });
+
   const totalOpps = opps.length;
   const totalValue = opps.reduce((s, o) => s + (o.monetaryValue || 0), 0);
   const onboardedOpps = opps.filter(function(o) { return onboardingStageIds[o.pipelineStageId || o.stageId]; });
   const onboardedValue = onboardedOpps.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
-  const pipelineOpps = opps.filter(function(o) { return !onboardingStageIds[o.pipelineStageId || o.stageId]; });
+  const closedLostOpps = opps.filter(function(o) { return closedLostStageIds[o.pipelineStageId || o.stageId]; });
+  const pipelineOpps = opps.filter(function(o) { var sid = o.pipelineStageId || o.stageId; return !onboardingStageIds[sid] && !closedLostStageIds[sid]; });
   const pipelineValue = pipelineOpps.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
-  const conversionRate = totalOpps > 0 ? (onboardedOpps.length / totalOpps * 100) : 0;
+  // Win rate = onboarded / (onboarded + closed lost) — deals that reached a final outcome
+  const decidedCount = onboardedOpps.length + closedLostOpps.length;
+  const conversionRate = decidedCount > 0 ? (onboardedOpps.length / decidedCount * 100) : 0;
   const avgDealValue = onboardedOpps.length > 0 ? onboardedValue / onboardedOpps.length : 0;
 
   // Data completeness score (check all opps)
@@ -990,7 +999,7 @@ function renderDashboard() {
     { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: pipelineOpps.length + ' in pipeline / ' + onboardedOpps.length + ' onboarding' },
     { label: 'Pipeline Value', value: '£' + pipelineValue.toLocaleString(), sub: totalOpps + ' active leads' },
     { label: 'Onboarding Revenue', value: '£' + onboardedValue.toLocaleString(), sub: onboardedOpps.length + ' moved to onboarding' },
-    { label: 'Conversion Rate', value: conversionRate.toFixed(1) + '%', sub: onboardedOpps.length + ' of ' + totalOpps + ' reached onboarding' },
+    { label: 'Win Rate', value: conversionRate.toFixed(1) + '%', sub: onboardedOpps.length + ' won vs ' + closedLostOpps.length + ' lost' },
     { label: 'Avg Deal Size', value: '£' + avgDealValue.toLocaleString(undefined, {maximumFractionDigits:0}), sub: 'from ' + onboardedOpps.length + ' onboarded deals' },
   ];
 
@@ -1171,7 +1180,7 @@ function renderDashboard() {
   });
 
   // ── Wins by Lead Source ──
-  renderWinsBySource(opps, onboardingStageIds);
+  renderWinsBySource(opps, onboardingStageIds, closedLostStageIds);
 
   // ── Week on Week Analysis ──
   renderWeekOnWeek(opps, stages, onboardingStageIds);
@@ -1276,16 +1285,19 @@ function formatMonth(ym) {
 }
 
 // ── Onboarded by Lead Source ──
-function renderWinsBySource(opps, onbStageIds) {
+function renderWinsBySource(opps, onbStageIds, lostStageIds) {
   var sourceData = {};
   opps.forEach(function(o) {
     var src = o.source || o.leadSource || 'Unknown';
-    if (!sourceData[src]) sourceData[src] = { wins: 0, total: 0, wonValue: 0 };
+    if (!sourceData[src]) sourceData[src] = { wins: 0, losses: 0, total: 0, wonValue: 0 };
     sourceData[src].total++;
     var sid = o.pipelineStageId || o.stageId;
     if (onbStageIds[sid]) {
       sourceData[src].wins++;
       sourceData[src].wonValue += (o.monetaryValue || 0);
+    }
+    if (lostStageIds[sid]) {
+      sourceData[src].losses++;
     }
   });
 
@@ -1304,7 +1316,8 @@ function renderWinsBySource(opps, onbStageIds) {
 
   tbody.innerHTML = sorted.map(function(src) {
     var d = sourceData[src];
-    var winRate = d.total > 0 ? (d.wins / d.total * 100) : 0;
+    var decided = d.wins + d.losses;
+    var winRate = decided > 0 ? (d.wins / decided * 100) : 0;
     var avgDeal = d.wins > 0 ? d.wonValue / d.wins : 0;
     var revPct = totalWonRevenue > 0 ? (d.wonValue / totalWonRevenue * 100) : 0;
     var sourceColor = getSourceColor(src);
