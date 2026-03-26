@@ -325,18 +325,18 @@
       <canvas id="sourceChart" style="max-height:400px;"></canvas>
     </div>
 
-    <!-- Wins by Lead Source -->
+    <!-- Onboarded by Lead Source -->
     <div class="table-card" style="margin-bottom:24px;">
-      <h3>Wins by Lead Source</h3>
+      <h3>Onboarded by Lead Source</h3>
       <div style="overflow-x:auto">
         <table>
           <thead>
             <tr>
               <th>Source</th>
-              <th>Wins</th>
+              <th>Onboarded</th>
               <th>Total Leads</th>
-              <th>Win Rate</th>
-              <th>Won Revenue</th>
+              <th>Conversion Rate</th>
+              <th>Onboarding Revenue</th>
               <th>Avg Deal Value</th>
               <th>% of Total Revenue</th>
             </tr>
@@ -890,7 +890,7 @@ function renderDashboard() {
     return allowed;
   });
   const opps = allOpps.filter(function(o) {
-    if (o.status === 'abandoned' || o.status === 'lost') return false;
+    if (o.status === 'abandoned' || o.status === 'lost' || o.status === 'won') return false;
     var sid = o.pipelineStageId || o.stageId;
     return isAllowedStageId(sid);
   });
@@ -952,21 +952,29 @@ function renderDashboard() {
   document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
 
   // ── KPIs ──
+  // "Won" = reached "Assigned to Onboarding" stage or beyond (Go Live, Go Live Date Set)
+  var onboardingStageIds = {};
+  var onboardingKeywords = ['assigned to onboarding', 'go live'];
+  stages.forEach(function(s) {
+    var name = s.name.toLowerCase();
+    for (var i = 0; i < onboardingKeywords.length; i++) {
+      if (name.indexOf(onboardingKeywords[i]) >= 0) { onboardingStageIds[s.id] = true; break; }
+    }
+  });
+
   const totalOpps = opps.length;
   const totalValue = opps.reduce((s, o) => s + (o.monetaryValue || 0), 0);
-  const wonOpps = opps.filter(o => o.status === 'won');
-  const lostOpps = opps.filter(o => o.status === 'lost');
-  const abandonedOpps = opps.filter(o => o.status === 'abandoned');
-  const openOpps = opps.filter(o => o.status !== 'won' && o.status !== 'lost' && o.status !== 'abandoned');
-  const wonValue = wonOpps.reduce((s, o) => s + (o.monetaryValue || 0), 0);
-  const openValue = openOpps.reduce((s, o) => s + (o.monetaryValue || 0), 0);
-  const winRate = totalOpps > 0 ? ((wonOpps.length / (wonOpps.length + lostOpps.length)) * 100) : 0;
-  const avgDealValue = wonOpps.length > 0 ? wonValue / wonOpps.length : 0;
+  const onboardedOpps = opps.filter(function(o) { return onboardingStageIds[o.pipelineStageId || o.stageId]; });
+  const onboardedValue = onboardedOpps.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
+  const pipelineOpps = opps.filter(function(o) { return !onboardingStageIds[o.pipelineStageId || o.stageId]; });
+  const pipelineValue = pipelineOpps.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
+  const conversionRate = totalOpps > 0 ? (onboardedOpps.length / totalOpps * 100) : 0;
+  const avgDealValue = onboardedOpps.length > 0 ? onboardedValue / onboardedOpps.length : 0;
 
-  // Data completeness score
+  // Data completeness score (check all opps)
   var completeCount = 0;
-  var checkedCount = openOpps.length;
-  openOpps.forEach(function(o) {
+  var checkedCount = opps.length;
+  opps.forEach(function(o) {
     var hasBusiness = !!(o.contact && o.contact.companyName) || !!o.companyName || !!o.name;
     var hasValue = !!o.monetaryValue;
     var hasSource = !!(o.source || o.leadSource);
@@ -979,11 +987,11 @@ function renderDashboard() {
   var completeColor = completePct >= 90 ? 'var(--green)' : completePct >= 70 ? 'var(--amber)' : 'var(--red)';
 
   const kpis = [
-    { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: openOpps.length + ' open / ' + wonOpps.length + ' won / ' + lostOpps.length + ' lost' + (abandonedOpps.length > 0 ? ' / ' + abandonedOpps.length + ' abandoned' : '') },
-    { label: 'Total Pipeline Value', value: '£' + totalValue.toLocaleString(), sub: '£' + openValue.toLocaleString() + ' open' },
-    { label: 'Won Revenue', value: '£' + wonValue.toLocaleString(), sub: wonOpps.length + ' deals closed' },
-    { label: 'Win Rate', value: (winRate || 0).toFixed(1) + '%', sub: wonOpps.length + 'W / ' + lostOpps.length + 'L' },
-    { label: 'Avg Deal Size (Won)', value: '£' + avgDealValue.toLocaleString(undefined, {maximumFractionDigits:0}), sub: 'from ' + wonOpps.length + ' deals' },
+    { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: pipelineOpps.length + ' in pipeline / ' + onboardedOpps.length + ' onboarding' },
+    { label: 'Pipeline Value', value: '£' + pipelineValue.toLocaleString(), sub: totalOpps + ' active leads' },
+    { label: 'Onboarding Revenue', value: '£' + onboardedValue.toLocaleString(), sub: onboardedOpps.length + ' moved to onboarding' },
+    { label: 'Conversion Rate', value: conversionRate.toFixed(1) + '%', sub: onboardedOpps.length + ' of ' + totalOpps + ' reached onboarding' },
+    { label: 'Avg Deal Size', value: '£' + avgDealValue.toLocaleString(undefined, {maximumFractionDigits:0}), sub: 'from ' + onboardedOpps.length + ' onboarded deals' },
   ];
 
   document.getElementById('kpiRow').innerHTML = kpis.map(function(k) {
@@ -1075,14 +1083,13 @@ function renderDashboard() {
   });
 
   // 2. Status breakdown (doughnut) — compact
-  var statusCounts = { open: openOpps.length, won: wonOpps.length, lost: lostOpps.length, abandoned: abandonedOpps.length };
   charts.status = new Chart(document.getElementById('statusChart'), {
     type: 'doughnut',
     data: {
-      labels: ['Open', 'Won', 'Lost', 'Abandoned'],
+      labels: ['In Pipeline', 'Onboarding'],
       datasets: [{
-        data: [statusCounts.open, statusCounts.won, statusCounts.lost, statusCounts.abandoned],
-        backgroundColor: [var_blue, var_green, var_red, '#71717a'],
+        data: [pipelineOpps.length, onboardedOpps.length],
+        backgroundColor: [var_blue, var_green],
         borderWidth: 0
       }]
     },
@@ -1164,10 +1171,10 @@ function renderDashboard() {
   });
 
   // ── Wins by Lead Source ──
-  renderWinsBySource(opps);
+  renderWinsBySource(opps, onboardingStageIds);
 
   // ── Week on Week Analysis ──
-  renderWeekOnWeek(opps, stages);
+  renderWeekOnWeek(opps, stages, onboardingStageIds);
 
   // ── Stale Deals ──
   renderStaleDeals(stages);
@@ -1268,14 +1275,15 @@ function formatMonth(ym) {
   return months[parseInt(m)-1] + ' ' + y;
 }
 
-// ── Wins by Lead Source ──
-function renderWinsBySource(opps) {
+// ── Onboarded by Lead Source ──
+function renderWinsBySource(opps, onbStageIds) {
   var sourceData = {};
   opps.forEach(function(o) {
     var src = o.source || o.leadSource || 'Unknown';
     if (!sourceData[src]) sourceData[src] = { wins: 0, total: 0, wonValue: 0 };
     sourceData[src].total++;
-    if (o.status === 'won') {
+    var sid = o.pipelineStageId || o.stageId;
+    if (onbStageIds[sid]) {
       sourceData[src].wins++;
       sourceData[src].wonValue += (o.monetaryValue || 0);
     }
@@ -1352,7 +1360,7 @@ function renderActiveLeads(opps, stages) {
   var activeLeads = [];
   var missingInfo = [];
   opps.forEach(function(o) {
-    if (o.status === 'won' || o.status === 'lost') return;
+    // won/lost/abandoned already excluded by main filter
     var sid = o.pipelineStageId || o.stageId;
     var ord = stageOrder[sid] !== undefined ? stageOrder[sid] : -1;
     if (ord >= firstActiveOrder) {
@@ -1472,7 +1480,7 @@ function getDealOwner(o) {
 function renderStaleDeals(stages) {
   var STALE_DAYS = 7;
   var now = Date.now();
-  var allOpps = allOpportunities.filter(function(o) { return o.status !== 'abandoned' && o.status !== 'lost' && isAllowedStageId(o.pipelineStageId || o.stageId); });
+  var allOpps = allOpportunities.filter(function(o) { return o.status !== 'abandoned' && o.status !== 'lost' && o.status !== 'won' && isAllowedStageId(o.pipelineStageId || o.stageId); });
 
   // Stage keyword groups
   var stageGroups = [
@@ -1595,7 +1603,7 @@ function esc(s) {
 }
 
 // ── Week on Week ──
-function renderWeekOnWeek(opps, stages) {
+function renderWeekOnWeek(opps, stages, onbStageIds) {
   var now = new Date();
   var dayOfWeek = now.getDay() || 7; // Mon=1 ... Sun=7
   var thisWeekStart = new Date(now);
@@ -1607,28 +1615,27 @@ function renderWeekOnWeek(opps, stages) {
   lastWeekEnd.setMilliseconds(-1);
 
   // Use ALL opportunities (not date-filtered) for WoW since we're comparing snapshots
-  var allOpps = allOpportunities.filter(function(o) { return o.status !== 'abandoned' && o.status !== 'lost' && isAllowedStageId(o.pipelineStageId || o.stageId); });
+  var allOpps = allOpportunities.filter(function(o) { return o.status !== 'abandoned' && o.status !== 'lost' && o.status !== 'won' && isAllowedStageId(o.pipelineStageId || o.stageId); });
 
   // Categorise by created date
   var thisWeek = allOpps.filter(function(o) { return new Date(o.createdAt) >= thisWeekStart; });
   var lastWeek = allOpps.filter(function(o) { var d = new Date(o.createdAt); return d >= lastWeekStart && d < thisWeekStart; });
 
-  // Status counts per week
-  var statuses = ['open', 'won', 'lost', 'abandoned'];
-  var twStatus = {}, lwStatus = {};
-  statuses.forEach(function(s) { twStatus[s] = 0; lwStatus[s] = 0; });
-  thisWeek.forEach(function(o) { var s = o.status || 'open'; if (twStatus[s] !== undefined) twStatus[s]++; });
-  lastWeek.forEach(function(o) { var s = o.status || 'open'; if (lwStatus[s] !== undefined) lwStatus[s]++; });
+  // Category counts per week (Pipeline vs Onboarding)
+  var twPipeline = thisWeek.filter(function(o) { return !onbStageIds[o.pipelineStageId || o.stageId]; }).length;
+  var twOnb = thisWeek.filter(function(o) { return !!onbStageIds[o.pipelineStageId || o.stageId]; }).length;
+  var lwPipeline = lastWeek.filter(function(o) { return !onbStageIds[o.pipelineStageId || o.stageId]; }).length;
+  var lwOnb = lastWeek.filter(function(o) { return !!onbStageIds[o.pipelineStageId || o.stageId]; }).length;
 
   // WoW Status grouped bar chart
   if (charts.wowStatus) charts.wowStatus.destroy();
   charts.wowStatus = new Chart(document.getElementById('wowStatusChart'), {
     type: 'bar',
     data: {
-      labels: ['Open', 'Won', 'Lost', 'Abandoned'],
+      labels: ['In Pipeline', 'Onboarding'],
       datasets: [
-        { label: 'Last Week', data: statuses.map(function(s) { return lwStatus[s]; }), backgroundColor: '#71717acc', borderRadius: 4, borderSkipped: false },
-        { label: 'This Week', data: statuses.map(function(s) { return twStatus[s]; }), backgroundColor: '#6366f1cc', borderRadius: 4, borderSkipped: false }
+        { label: 'Last Week', data: [lwPipeline, lwOnb], backgroundColor: '#71717acc', borderRadius: 4, borderSkipped: false },
+        { label: 'This Week', data: [twPipeline, twOnb], backgroundColor: '#6366f1cc', borderRadius: 4, borderSkipped: false }
       ]
     },
     options: {
@@ -1669,11 +1676,13 @@ function renderWeekOnWeek(opps, stages) {
 
   // WoW KPI cards with deltas
   var twTotal = thisWeek.length, lwTotal = lastWeek.length;
-  var twWon = twStatus.won, lwWon = lwStatus.won;
+  var twOnboarded = thisWeek.filter(function(o) { return onbStageIds[o.pipelineStageId || o.stageId]; });
+  var lwOnboarded = lastWeek.filter(function(o) { return onbStageIds[o.pipelineStageId || o.stageId]; });
+  var twWon = twOnboarded.length, lwWon = lwOnboarded.length;
   var twValue = thisWeek.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
   var lwValue = lastWeek.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
-  var twWonVal = thisWeek.filter(function(o) { return o.status === 'won'; }).reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
-  var lwWonVal = lastWeek.filter(function(o) { return o.status === 'won'; }).reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
+  var twWonVal = twOnboarded.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
+  var lwWonVal = lwOnboarded.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
 
   function deltaHTML(current, previous, prefix) {
     prefix = prefix || '';
@@ -1686,9 +1695,9 @@ function renderWeekOnWeek(opps, stages) {
 
   document.getElementById('wowKpis').innerHTML =
     '<div class="kpi-card"><div class="kpi-label">New Opps This Week</div><div class="kpi-value">' + twTotal + '</div><div class="kpi-sub">' + deltaHTML(twTotal, lwTotal) + '</div></div>' +
-    '<div class="kpi-card"><div class="kpi-label">Wins This Week</div><div class="kpi-value">' + twWon + '</div><div class="kpi-sub">' + deltaHTML(twWon, lwWon) + '</div></div>' +
+    '<div class="kpi-card"><div class="kpi-label">Onboarded This Week</div><div class="kpi-value">' + twWon + '</div><div class="kpi-sub">' + deltaHTML(twWon, lwWon) + '</div></div>' +
     '<div class="kpi-card"><div class="kpi-label">Pipeline Value This Week</div><div class="kpi-value">£' + twValue.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twValue, lwValue, '£') + '</div></div>' +
-    '<div class="kpi-card"><div class="kpi-label">Won Revenue This Week</div><div class="kpi-value">£' + twWonVal.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twWonVal, lwWonVal, '£') + '</div></div>';
+    '<div class="kpi-card"><div class="kpi-label">Onboarding Revenue This Week</div><div class="kpi-value">£' + twWonVal.toLocaleString() + '</div><div class="kpi-sub">' + deltaHTML(twWonVal, lwWonVal, '£') + '</div></div>';
 }
 
 // ── Show admin button if admin, then auto-login check ──
