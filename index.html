@@ -426,7 +426,10 @@
     <!-- Weekly Management Metrics -->
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
       <span style="font-size:14px; font-weight:600; color:var(--text);">Live GHL Metrics — <span id="mgmtWeekDisplay"></span></span>
-      <button class="btn-sm" onclick="openMetricsModal()" style="font-size:11px; padding:4px 12px;">Enter Manual Stats</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-sm" onclick="openMetricsModal()" style="font-size:11px; padding:4px 12px;">Enter Manual Stats</button>
+        <button class="btn-sm" id="seedHistoryBtn" onclick="seedHistoricalData()" style="font-size:11px; padding:4px 12px; display:none;">Import History</button>
+      </div>
     </div>
     <div class="kpi-row" id="weeklyMetricsRow" style="margin-bottom:24px;"></div>
 
@@ -882,6 +885,8 @@ function switchTab(tab) {
     if (isAdminUser) {
       var btn = document.getElementById('mgmtAdminBtn');
       if (btn) btn.style.display = '';
+      var seedBtn = document.getElementById('seedHistoryBtn');
+      if (seedBtn) seedBtn.style.display = '';
     }
     // Update week display and load metrics
     var week = getCurrentWeekKey();
@@ -1990,6 +1995,40 @@ async function saveWeeklyMetrics() {
   fetch('/metrics/weekly/all').then(function(r) { return r.json(); }).then(function(data) {
     renderMetricsHistory(data.metrics || {});
   }).catch(function() {});
+}
+
+async function seedHistoricalData() {
+  var historicalData = {
+    "2026-W02": {"totalCalls":676,"talkTimeHrs":14,"talkTimeMins":10,"quotesSent":15,"demos":10,"formsSent":5,"formsCompleted":3,"totalOnboarding":10,"clientsLive":2,"clientsLost":0,"referrals":1},
+    "2026-W03": {"totalCalls":820,"talkTimeHrs":17,"talkTimeMins":14,"quotesSent":22,"demos":12,"formsSent":6,"formsCompleted":4,"totalOnboarding":12,"clientsLive":3,"clientsLost":1,"referrals":0},
+    "2026-W04": {"totalCalls":754,"talkTimeHrs":14,"talkTimeMins":55,"quotesSent":18,"demos":14,"formsSent":7,"formsCompleted":5,"totalOnboarding":14,"clientsLive":4,"clientsLost":0,"referrals":2},
+    "2026-W05": {"totalCalls":812,"talkTimeHrs":16,"talkTimeMins":30,"quotesSent":20,"demos":11,"formsSent":8,"formsCompleted":3,"totalOnboarding":12,"clientsLive":2,"clientsLost":1,"referrals":1},
+    "2026-W06": {"totalCalls":690,"talkTimeHrs":13,"talkTimeMins":45,"quotesSent":16,"demos":9,"formsSent":4,"formsCompleted":2,"totalOnboarding":10,"clientsLive":1,"clientsLost":2,"referrals":0},
+    "2026-W07": {"totalCalls":845,"talkTimeHrs":18,"talkTimeMins":20,"quotesSent":24,"demos":16,"formsSent":9,"formsCompleted":6,"totalOnboarding":16,"clientsLive":5,"clientsLost":0,"referrals":3},
+    "2026-W08": {"totalCalls":780,"talkTimeHrs":15,"talkTimeMins":40,"quotesSent":19,"demos":13,"formsSent":6,"formsCompleted":4,"totalOnboarding":14,"clientsLive":3,"clientsLost":1,"referrals":1},
+    "2026-W09": {"totalCalls":900,"talkTimeHrs":19,"talkTimeMins":5,"quotesSent":25,"demos":17,"formsSent":10,"formsCompleted":7,"totalOnboarding":18,"clientsLive":6,"clientsLost":0,"referrals":2},
+    "2026-W10": {"totalCalls":710,"talkTimeHrs":14,"talkTimeMins":0,"quotesSent":17,"demos":10,"formsSent":5,"formsCompleted":3,"totalOnboarding":11,"clientsLive":2,"clientsLost":1,"referrals":0},
+    "2026-W11": {"totalCalls":860,"talkTimeHrs":17,"talkTimeMins":50,"quotesSent":23,"demos":15,"formsSent":8,"formsCompleted":5,"totalOnboarding":15,"clientsLive":4,"clientsLost":0,"referrals":2},
+    "2026-W12": {"totalCalls":795,"talkTimeHrs":16,"talkTimeMins":15,"quotesSent":21,"demos":14,"formsSent":7,"formsCompleted":4,"totalOnboarding":13,"clientsLive":3,"clientsLost":1,"referrals":1}
+  };
+  try {
+    var resp = await fetch('/metrics/weekly/seed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ metrics: historicalData })
+    });
+    var result = await resp.json();
+    if (result.ok) {
+      alert('Historical data imported: ' + result.weeksImported + ' weeks');
+      fetch('/metrics/weekly/all').then(function(r) { return r.json(); }).then(function(data) {
+        renderMetricsHistory(data.metrics || {});
+      });
+    } else {
+      alert('Import failed: ' + (result.error || 'Unknown error'));
+    }
+  } catch (e) {
+    alert('Import failed: ' + e.message);
+  }
 }
 
 function cardGlow(value, targetKey) {

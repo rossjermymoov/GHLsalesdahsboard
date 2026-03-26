@@ -354,6 +354,19 @@ const server = http.createServer(async (req, res) => {
   // WEEKLY METRICS ENDPOINTS
   // ════════════════════════════════════════
 
+  // POST /metrics/weekly/seed — bulk import historical metrics (admin only)
+  if (url === '/metrics/weekly/seed' && req.method === 'POST') {
+    if (!isAdmin(req)) return jsonResponse(res, 401, { error: 'Admin access required' });
+    const body = await parseBody(req);
+    const data = body.metrics || {};
+    Object.keys(data).forEach(week => {
+      weeklyMetrics[week] = Object.assign(weeklyMetrics[week] || {}, data[week]);
+    });
+    saveMetrics();
+    jsonResponse(res, 200, { ok: true, weeksImported: Object.keys(data).length });
+    return;
+  }
+
   // GET /metrics/weekly/all — return all saved weekly metrics
   if (url === '/metrics/weekly/all' && req.method === 'GET') {
     if (!isManager(req)) return jsonResponse(res, 401, { error: 'Manager access required' });
