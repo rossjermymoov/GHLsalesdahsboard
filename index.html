@@ -1181,7 +1181,7 @@ function renderDashboard() {
   renderWinsBySource(opps, onboardingStageIds, closedLostStageIds);
 
   // ── Week on Week Analysis ──
-  renderWeekOnWeek(opps, stages, onboardingStageIds);
+  renderWeekOnWeek(opps, stages, onboardingStageIds, closedLostStageIds);
 
   // ── Stale Deals ──
   renderStaleDeals(stages);
@@ -1613,7 +1613,7 @@ function esc(s) {
 }
 
 // ── Week on Week ──
-function renderWeekOnWeek(opps, stages, onbStageIds) {
+function renderWeekOnWeek(opps, stages, onbStageIds, lostStageIds) {
   var now = new Date();
   var dayOfWeek = now.getDay() || 7; // Mon=1 ... Sun=7
   var thisWeekStart = new Date(now);
@@ -1701,10 +1701,19 @@ function renderWeekOnWeek(opps, stages, onbStageIds) {
   console.log('Onboarded last week:', lwOnboarded.map(function(o) { return getBusinessName(o); }));
   var twWon = twOnboarded.length, lwWon = lwOnboarded.length;
   // Total pipeline value = all active deals right now (excludes onboarded + closed lost)
-  var totalPipelineValue = allOpps.filter(function(o) {
+  var pipelineDeals = allOpps.filter(function(o) {
     var sid = o.pipelineStageId || o.stageId;
-    return !onbStageIds[sid];
-  }).reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
+    return !onbStageIds[sid] && !lostStageIds[sid];
+  });
+  var totalPipelineValue = pipelineDeals.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
+  console.log('=== PIPELINE VALUE DEBUG ===');
+  console.log('Total pipeline deals:', pipelineDeals.length);
+  console.log('Deals with value:', pipelineDeals.filter(function(o) { return !!o.monetaryValue; }).length);
+  console.log('Deals without value:', pipelineDeals.filter(function(o) { return !o.monetaryValue; }).length);
+  pipelineDeals.forEach(function(o) {
+    console.log('  ' + getBusinessName(o) + ': £' + (o.monetaryValue || 0));
+  });
+  console.log('Total pipeline value: £' + totalPipelineValue);
   // Net change this week = value added (new opps) minus value removed (onboarded out)
   var newOppsValue = thisWeek.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
   var twWonVal = twOnboarded.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
