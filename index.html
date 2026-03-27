@@ -1548,27 +1548,7 @@ function renderActiveLeads(opps, stages, closedLostIds) {
   var stageNames = {};
   stages.forEach(function(s, i) { stageOrder[s.id] = i; stageNames[s.id] = s.name; });
 
-  // Find the "1st contact attempted" stage or equivalent (first stage that implies active work)
-  var firstActiveOrder = -1;
-  var activeKeywords = ['1st contact', 'first contact', 'contact attempted', 'contacted', 'qualifying', 'qualified'];
-  stages.forEach(function(s) {
-    var name = s.name.toLowerCase();
-    for (var i = 0; i < activeKeywords.length; i++) {
-      if (name.indexOf(activeKeywords[i]) >= 0) {
-        if (firstActiveOrder === -1 || stageOrder[s.id] < firstActiveOrder) {
-          firstActiveOrder = stageOrder[s.id];
-        }
-        return;
-      }
-    }
-  });
-
-  // If no keyword match, use the 2nd stage (skip the first "new/uncontacted" stage)
-  if (firstActiveOrder === -1 && stages.length > 1) {
-    firstActiveOrder = 1;
-  }
-
-  // Filter to open deals at or past the first active stage, exclude won/lost
+  // All leads except closed lost
   var now = Date.now();
   var activeLeads = [];
   var missingInfo = [];
@@ -1581,9 +1561,7 @@ function renderActiveLeads(opps, stages, closedLostIds) {
     var sid = o.pipelineStageId || o.stageId;
     // Exclude closed lost from active leads
     if (closedLostIds[sid]) return;
-    var ord = stageOrder[sid] !== undefined ? stageOrder[sid] : -1;
-    if (ord >= firstActiveOrder) {
-      var business = getBusinessName(o);
+    var business = getBusinessName(o);
       var owner = getDealOwner(o);
       var value = o.monetaryValue ? '£' + o.monetaryValue.toLocaleString() : '';
       var source = o.source || o.leadSource || '';
@@ -1614,7 +1592,6 @@ function renderActiveLeads(opps, stages, closedLostIds) {
           missingInfo.push({ id: oppId, business: business, missing: missing });
         }
       }
-    }
   });
 
   // Sort by days in stage descending
