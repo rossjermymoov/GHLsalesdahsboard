@@ -1133,10 +1133,10 @@ function renderDashboard() {
   const conversionRate = decidedCount > 0 ? (onboardedOpps.length / decidedCount * 100) : 0;
   const avgDealValue = onboardedOpps.length > 0 ? onboardedValue / onboardedOpps.length : 0;
 
-  // Data completeness score (check all opps)
+  // Data completeness score (only check active pipeline leads, not onboarding/closed lost)
   var completeCount = 0;
-  var checkedCount = opps.length;
-  opps.forEach(function(o) {
+  var checkedCount = pipelineOpps.length;
+  pipelineOpps.forEach(function(o) {
     var hasBusiness = !!(o.contact && o.contact.companyName) || !!o.companyName || !!o.name;
     var hasSource = !!(o.source || o.leadSource);
     var hasOwner = getDealOwner(o) !== '—';
@@ -1149,7 +1149,7 @@ function renderDashboard() {
 
   const kpis = [
     { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: pipelineOpps.length + ' in pipeline / ' + onboardedOpps.length + ' onboarding' },
-    { label: 'Pipeline Margin', value: '£' + pipelineValue.toLocaleString(), sub: totalOpps + ' active leads' },
+    { label: 'Pipeline Margin', value: '£' + pipelineValue.toLocaleString(), sub: pipelineOpps.length + ' active leads' },
     { label: 'Onboarding Margin', value: '£' + onboardedValue.toLocaleString(), sub: onboardedOpps.length + ' moved to onboarding' },
     { label: 'Win Rate', value: conversionRate.toFixed(1) + '%', sub: onboardedOpps.length + ' won vs ' + closedLostOpps.length + ' lost' },
     { label: 'Avg Deal Margin', value: '£' + avgDealValue.toLocaleString(undefined, {maximumFractionDigits:0}), sub: 'from ' + onboardedOpps.length + ' onboarded deals' },
@@ -1570,7 +1570,12 @@ function renderActiveLeads(opps, stages) {
   var now = Date.now();
   var activeLeads = [];
   var missingInfo = [];
+  var seenOppIds = {};
   opps.forEach(function(o) {
+    // Deduplicate by opportunity ID
+    var oppId = o.id || '';
+    if (oppId && seenOppIds[oppId]) return;
+    if (oppId) seenOppIds[oppId] = true;
     // won/lost/abandoned already excluded by main filter
     var sid = o.pipelineStageId || o.stageId;
     var ord = stageOrder[sid] !== undefined ? stageOrder[sid] : -1;
@@ -1600,7 +1605,10 @@ function renderActiveLeads(opps, stages) {
       });
 
       if (missing.length > 0) {
-        missingInfo.push({ business: business, missing: missing });
+        var oppId = o.id || (business + '_' + sid);
+        if (!missingInfo.some(function(m) { return m.id === oppId; })) {
+          missingInfo.push({ id: oppId, business: business, missing: missing });
+        }
       }
     }
   });
