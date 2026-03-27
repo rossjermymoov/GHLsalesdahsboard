@@ -1343,7 +1343,7 @@ function renderDashboard() {
   renderStaleDeals(stages);
 
   // ── Active Leads (1st contact attempted and above) ──
-  renderActiveLeads(opps, stages);
+  renderActiveLeads(opps, stages, closedLostStageIds);
 
   // ── GHL Auto Metrics for Weekly Management Row ──
   var thisWeekStartMgmt = new Date();
@@ -1543,7 +1543,7 @@ function renderWinsBySource(opps, onbStageIds, lostStageIds) {
 }
 
 // ── Active Leads (being worked on) ──
-function renderActiveLeads(opps, stages) {
+function renderActiveLeads(opps, stages, closedLostIds) {
   var stageOrder = {};
   var stageNames = {};
   stages.forEach(function(s, i) { stageOrder[s.id] = i; stageNames[s.id] = s.name; });
@@ -1578,8 +1578,9 @@ function renderActiveLeads(opps, stages) {
     var oppId = o.id || '';
     if (oppId && seenOppIds[oppId]) return;
     if (oppId) seenOppIds[oppId] = true;
-    // won/lost/abandoned already excluded by main filter
     var sid = o.pipelineStageId || o.stageId;
+    // Exclude closed lost from active leads
+    if (closedLostIds[sid]) return;
     var ord = stageOrder[sid] !== undefined ? stageOrder[sid] : -1;
     if (ord >= firstActiveOrder) {
       var business = getBusinessName(o);
@@ -1592,9 +1593,10 @@ function renderActiveLeads(opps, stages) {
       var days = Math.max(0, Math.floor((now - stageDate) / (1000 * 60 * 60 * 24)));
       var stageName = stageNames[sid] || '—';
 
-      // Track missing fields
+      // Track missing fields (same logic as data completeness KPI)
       var missing = [];
-      if (!o.contact || !o.contact.companyName) missing.push('business name');
+      var hasBiz = !!(o.contact && o.contact.companyName) || !!o.companyName || !!o.name;
+      if (!hasBiz) missing.push('business name');
       if (!source) missing.push('source');
       if (owner === '—') missing.push('owner');
       if (!email) missing.push('email');
