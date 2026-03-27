@@ -1121,7 +1121,7 @@ function renderDashboard() {
     if (s.name.toLowerCase().indexOf('closed lost') >= 0) { closedLostStageIds[s.id] = true; }
   });
 
-  const totalOpps = opps.length;
+  const totalOpps = opps.filter(function(o) { var sid = o.pipelineStageId || o.stageId; return !closedLostStageIds[sid]; }).length;
   const totalValue = opps.reduce((s, o) => s + (o.monetaryValue || 0), 0);
   const onboardedOpps = opps.filter(function(o) { return onboardingStageIds[o.pipelineStageId || o.stageId]; });
   const onboardedValue = onboardedOpps.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
@@ -1183,7 +1183,8 @@ function renderDashboard() {
   const maxCount = Math.max(...Object.values(stageMap).map(s => s.count), 1);
 
   let funnelHTML = '<h3>Pipeline Funnel</h3><div class="funnel-stages">';
-  stages.forEach((s, i) => {
+  var funnelStages = stages.filter(function(s) { return !closedLostStageIds[s.id]; });
+  funnelStages.forEach((s, i) => {
     const data = stageMap[s.id] || { count: 0, value: 0, opps: [] };
     const pct = (data.count / maxCount) * 100;
     const color = COLORS[i % COLORS.length];
