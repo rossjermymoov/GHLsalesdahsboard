@@ -1133,10 +1133,11 @@ function renderDashboard() {
   const conversionRate = decidedCount > 0 ? (onboardedOpps.length / decidedCount * 100) : 0;
   const avgDealValue = onboardedOpps.length > 0 ? onboardedValue / onboardedOpps.length : 0;
 
-  // Data completeness score (only check active pipeline leads, not onboarding/closed lost)
+  // Data completeness score (pipeline + onboarding, exclude closed lost)
+  var completenessOpps = opps.filter(function(o) { var sid = o.pipelineStageId || o.stageId; return !closedLostStageIds[sid]; });
   var completeCount = 0;
-  var checkedCount = pipelineOpps.length;
-  pipelineOpps.forEach(function(o) {
+  var checkedCount = completenessOpps.length;
+  completenessOpps.forEach(function(o) {
     var hasBusiness = !!(o.contact && o.contact.companyName) || !!o.companyName || !!o.name;
     var hasSource = !!(o.source || o.leadSource);
     var hasOwner = getDealOwner(o) !== '—';
