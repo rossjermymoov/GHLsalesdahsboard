@@ -72,10 +72,16 @@
 
   /* KPI Row */
   .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
-  .kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; }
+  .kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; position: relative; cursor: default; }
   .kpi-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 8px; }
   .kpi-value { font-size: 28px; font-weight: 700; }
   .kpi-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .kpi-tooltip { display: none; position: absolute; left: 0; top: 100%; z-index: 50; background: var(--tooltip-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; min-width: 280px; max-width: 380px; max-height: 300px; overflow-y: auto; box-shadow: 0 8px 24px var(--shadow); font-size: 12px; margin-top: 4px; }
+  .kpi-card:hover .kpi-tooltip { display: block; }
+  .kpi-tooltip h4 { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--accent); }
+  .kpi-tooltip table { width: 100%; border-collapse: collapse; }
+  .kpi-tooltip th { padding: 3px 8px; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); text-align: left; }
+  .kpi-tooltip td { padding: 4px 8px; font-size: 12px; border-bottom: 1px solid var(--row-border); }
 
   /* Charts Grid */
   .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
@@ -1194,12 +1200,37 @@ function renderDashboard() {
   var completePct = checkedCount > 0 ? Math.round((completeCount / checkedCount) * 100) : 0;
   var completeColor = completePct >= 90 ? 'var(--green)' : completePct >= 70 ? 'var(--amber)' : 'var(--red)';
 
+  // Helper: build deal list tooltip HTML
+  function dealTooltip(title, dealList, title2, dealList2) {
+    function buildSection(t, list) {
+      if (!list || list.length === 0) return '<h4>' + t + ' (0)</h4>';
+      var sorted = list.slice().sort(function(a, b) { return (b.monetaryValue || 0) - (a.monetaryValue || 0); });
+      var rows = sorted.map(function(o) {
+        var name = esc(getBusinessName(o));
+        var val = o.monetaryValue ? '£' + o.monetaryValue.toLocaleString() : '—';
+        return '<tr><td>' + name + '</td><td style="text-align:right; white-space:nowrap;">' + val + '</td></tr>';
+      }).join('');
+      return '<h4>' + t + ' (' + list.length + ')</h4>'
+        + '<table><thead><tr><th>Business</th><th style="text-align:right;">Margin</th></tr></thead>'
+        + '<tbody>' + rows + '</tbody></table>';
+    }
+    if (!dealList || dealList.length === 0) return '';
+    var html = '<div class="kpi-tooltip">' + buildSection(title, dealList);
+    if (title2 && dealList2) {
+      html += '<div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">' + buildSection(title2, dealList2) + '</div>';
+    }
+    return html + '</div>';
+  }
+
+  // Combine pipeline + onboarding for total opps tooltip
+  var totalOppsDeals = pipelineOpps.concat(onboardedOpps);
+
   const kpis = [
-    { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: pipelineOpps.length + ' in pipeline / ' + onboardedOpps.length + ' onboarding' },
-    { label: 'Pipeline Margin', value: '£' + pipelineValue.toLocaleString(), sub: pipelineOpps.length + ' active leads' },
-    { label: 'Onboarding Margin', value: '£' + onboardedValue.toLocaleString(), sub: onboardedOpps.length + ' moved to onboarding' },
-    { label: 'Win Rate', value: conversionRate.toFixed(1) + '%', sub: onboardedOpps.length + ' won vs ' + closedLostOpps.length + ' lost' },
-    { label: 'Avg Deal Margin', value: '£' + avgDealValue.toLocaleString(undefined, {maximumFractionDigits:0}), sub: 'from ' + onboardedOpps.length + ' onboarded deals' },
+    { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: pipelineOpps.length + ' in pipeline / ' + onboardedOpps.length + ' onboarding', tooltip: dealTooltip('All Opportunities', totalOppsDeals) },
+    { label: 'Pipeline Margin', value: '£' + pipelineValue.toLocaleString(), sub: pipelineOpps.length + ' active leads', tooltip: dealTooltip('Pipeline Deals', pipelineOpps) },
+    { label: 'Onboarding Margin', value: '£' + onboardedValue.toLocaleString(), sub: onboardedOpps.length + ' moved to onboarding', tooltip: dealTooltip('Onboarding Deals', onboardedOpps) },
+    { label: 'Win Rate', value: conversionRate.toFixed(1) + '%', sub: onboardedOpps.length + ' won vs ' + closedLostOpps.length + ' lost', tooltip: dealTooltip('Won', onboardedOpps, 'Lost', closedLostOpps) },
+    { label: 'Avg Deal Margin', value: '£' + avgDealValue.toLocaleString(undefined, {maximumFractionDigits:0}), sub: 'from ' + onboardedOpps.length + ' onboarded deals', tooltip: dealTooltip('Onboarded Deals', onboardedOpps) },
   ];
 
   document.getElementById('kpiRow').innerHTML = kpis.map(function(k) {
@@ -1207,6 +1238,7 @@ function renderDashboard() {
       + '<div class="kpi-label">' + k.label + '</div>'
       + '<div class="kpi-value">' + k.value + '</div>'
       + '<div class="kpi-sub">' + k.sub + '</div>'
+      + (k.tooltip || '')
       + '</div>';
   }).join('')
     + '<div class="kpi-card" style="border-color:' + completeColor + ';">'
