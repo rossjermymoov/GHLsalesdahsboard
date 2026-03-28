@@ -6,7 +6,7 @@
 <title>Sales Dashboard — Go High Level</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-  :root {
+  :root, [data-theme="dark"] {
     --bg: #0f1117;
     --card: #1a1d27;
     --border: #2a2d3a;
@@ -19,6 +19,28 @@
     --red: #ef4444;
     --blue: #3b82f6;
     --cyan: #06b6d4;
+    --tooltip-bg: #1e2030;
+    --overlay-bg: rgba(0,0,0,0.6);
+    --shadow: rgba(0,0,0,0.4);
+    --row-border: rgba(255,255,255,0.04);
+  }
+  [data-theme="light"] {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --border: #d1d5db;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --accent: #4f46e5;
+    --accent2: #7c3aed;
+    --green: #16a34a;
+    --amber: #d97706;
+    --red: #dc2626;
+    --blue: #2563eb;
+    --cyan: #0891b2;
+    --tooltip-bg: #ffffff;
+    --overlay-bg: rgba(0,0,0,0.3);
+    --shadow: rgba(0,0,0,0.1);
+    --row-border: rgba(0,0,0,0.06);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
@@ -73,7 +95,7 @@
   .funnel-stats { width: 180px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
   .funnel-stats strong { color: var(--text); }
   .funnel-bar { position: relative; cursor: pointer; }
-  .funnel-tooltip { display: none; position: absolute; left: 180px; top: 100%; z-index: 50; background: #1e2030; border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 320px; max-width: 420px; max-height: 300px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.4); font-size: 12px; }
+  .funnel-tooltip { display: none; position: absolute; left: 180px; top: 100%; z-index: 50; background: var(--tooltip-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 320px; max-width: 420px; max-height: 300px; overflow-y: auto; box-shadow: 0 8px 24px var(--shadow); font-size: 12px; }
   .funnel-bar:hover .funnel-tooltip { display: block; }
   .funnel-tooltip h4 { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--accent); }
   .funnel-tooltip table { width: 100%; }
@@ -194,6 +216,7 @@
     <div><h1>Admin Panel</h1></div>
     <div class="topbar-right">
       <button class="btn-sm" onclick="showDashboardFromAdmin()">View Dashboard</button>
+      <button class="btn-sm" onclick="toggleTheme()" id="themeToggle2" title="Toggle light/dark mode">Dark</button>
       <button class="btn-sm" onclick="logout()">Logout</button>
     </div>
   </div>
@@ -267,6 +290,7 @@
       <button class="btn-sm" onclick="refreshData()">Refresh</button>
       <button class="btn-sm" id="managementBtn" style="display:none" onclick="switchTab('management')">Management</button>
       <button class="btn-sm" id="adminBtn" style="display:none" onclick="showAdminPanel()">Admin</button>
+      <button class="btn-sm" onclick="toggleTheme()" id="themeToggle1" title="Toggle light/dark mode">Dark</button>
       <button class="btn-sm" onclick="logout()">Logout</button>
     </div>
   </div>
@@ -419,6 +443,7 @@
     <div class="topbar-right">
       <button class="btn-sm" onclick="switchTab('dashboard')">Back to Dashboard</button>
       <button class="btn-sm" id="mgmtAdminBtn" style="display:none" onclick="showAdminPanel()">Admin</button>
+      <button class="btn-sm" onclick="toggleTheme()" id="themeToggle3" title="Toggle light/dark mode">Dark</button>
       <button class="btn-sm" onclick="logout()">Logout</button>
     </div>
   </div>
@@ -464,7 +489,7 @@
     </div>
 
     <!-- Weekly Metrics Modal -->
-    <div id="metricsModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
+    <div id="metricsModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:var(--overlay-bg); z-index:9999; justify-content:center; align-items:center;">
       <div style="background:var(--card); border:1px solid var(--border); border-radius:12px; padding:28px; width:420px; max-width:90vw; max-height:85vh; overflow-y:auto;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
           <h3 style="margin:0; font-size:16px;">Enter Manual Stats</h3>
@@ -509,6 +534,27 @@
 </div>
 
 <script>
+// ── Theme Toggle ──
+function getTheme() {
+  return localStorage.getItem('dashboard-theme') || 'dark';
+}
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  var label = theme === 'light' ? 'Light' : 'Dark';
+  ['themeToggle1','themeToggle2','themeToggle3'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = label;
+  });
+}
+function toggleTheme() {
+  var current = getTheme();
+  var next = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('dashboard-theme', next);
+  applyTheme(next);
+}
+// Apply saved theme on load
+applyTheme(getTheme());
+
 const BASE = '/api';
 let allPipelines = [];
 let allOpportunities = [];
@@ -1617,7 +1663,7 @@ function renderActiveLeads(opps, stages, closedLostIds) {
     });
     missingHtml += '</tr></thead><tbody>';
     missingInfo.forEach(function(m) {
-      missingHtml += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:6px 10px; font-weight:600; color:var(--text);">' + esc(m.business) + '</td>';
+      missingHtml += '<tr style="border-bottom:1px solid var(--row-border);"><td style="padding:6px 10px; font-weight:600; color:var(--text);">' + esc(m.business) + '</td>';
       fieldKeys.forEach(function(k) {
         var has = m.missing.indexOf(k) === -1;
         missingHtml += '<td style="text-align:center; padding:6px 10px;">' + (has ? tick : cross) + '</td>';
