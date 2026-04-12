@@ -501,7 +501,10 @@
           <h3 style="margin:0; font-size:16px;">Enter Manual Stats</h3>
           <button onclick="closeMetricsModal()" style="background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; padding:4px 8px;">&times;</button>
         </div>
-        <div style="font-size:12px; color:var(--muted); margin-bottom:16px;">Week: <strong id="metricsWeekLabel"></strong></div>
+        <div style="font-size:12px; color:var(--muted); margin-bottom:16px;">
+          <label style="font-weight:600;">Week:</label>
+          <select id="metricsWeekSelect" onchange="onMetricsWeekChange()" style="margin-left:8px; padding:6px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px; cursor:pointer;"></select>
+        </div>
         <div style="display:flex; flex-direction:column; gap:12px;">
           <div style="display:flex; gap:8px;">
             <div style="flex:1;">
@@ -2014,11 +2017,36 @@ function getCurrentWeekKey() {
 
 var currentWeekMetrics = {};
 
-function openMetricsModal() {
-  var week = getCurrentWeekKey();
-  document.getElementById('metricsWeekLabel').textContent = weekKeyToWC(week);
-  document.getElementById('metricsModal').style.display = 'flex';
-  // Load current values
+function getWeekKeyForDate(date) {
+  var jan1 = new Date(date.getFullYear(), 0, 1);
+  var days = Math.floor((date - jan1) / 86400000);
+  var weekNum = Math.ceil((days + jan1.getDay() + 1) / 7);
+  return date.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+}
+
+function populateWeekSelector(selectedWeek) {
+  var select = document.getElementById('metricsWeekSelect');
+  select.innerHTML = '';
+  var now = new Date();
+  var currentWeek = getCurrentWeekKey();
+  // Show current week + past 12 weeks
+  for (var i = 0; i < 13; i++) {
+    var d = new Date(now);
+    d.setDate(d.getDate() - (i * 7));
+    var wk = getWeekKeyForDate(d);
+    // Avoid duplicate week keys
+    if (select.querySelector('option[value="' + wk + '"]')) continue;
+    var opt = document.createElement('option');
+    opt.value = wk;
+    var label = weekKeyToWC(wk);
+    if (wk === currentWeek) label += ' (This week)';
+    opt.textContent = label;
+    select.appendChild(opt);
+  }
+  select.value = selectedWeek || currentWeek;
+}
+
+function loadMetricsForWeek(week) {
   fetch('/metrics/weekly?week=' + week).then(function(r) { return r.json(); }).then(function(data) {
     var m = data.metrics || {};
     document.getElementById('metricTalkHrs').value = m.talkTimeHrs || '';
@@ -2030,32 +2058,61 @@ function openMetricsModal() {
   });
 }
 
+function onMetricsWeekChange() {
+  var week = document.getElementById('metricsWeekSelect').value;
+  loadMetricsForWeek(week);
+}
+
+function openMetricsModal() {
+  var week = getCurrentWeekKey();
+  populateWeekSelector(week);
+  document.getElementById('metricsModal').style.display = 'flex';
+  loadMetricsForWeek(week);
+}
+
 function closeMetricsModal() {
   document.getElementById('metricsModal').style.display = 'none';
 }
 
 async function saveWeeklyMetrics() {
-  var week = getCurrentWeekKey();
+  var week = document.getElementById('metricsWeekSelect').value;
+  var isCurrentWeek = (week === getCurrentWeekKey());
   var metrics = {
     talkTimeHrs: parseInt(document.getElementById('metricTalkHrs').value) || 0,
     talkTimeMins: parseInt(document.getElementById('metricTalkMins').value) || 0,
     totalCalls: parseInt(document.getElementById('metricTotalCalls').value) || 0,
     clientsLive: parseInt(document.getElementById('metricClientsLive').value) || 0,
     clientsLost: parseInt(document.getElementById('metricClientsLost').value) || 0,
-    referrals: parseInt(document.getElementById('metricReferrals').value) || 0,
-    // Also persist GHL auto-metrics so they appear in history
-    quotesSent: window._ghlQuotesSentThisWeek || 0,
-    demos: window._ghlDemosThisWeek || 0,
-    formsSent: window._ghlFormsSentThisWeek || 0,
-    formsCompleted: window._ghlFormsCompleted || 0,
-    totalOnboarding: window._ghlTotalOnboarding || 0
+    referrals: parseInt(document.getElementById('metricReferrals').value) || 0
   };
+  if (isCurrentWeek) {
+    // Include live GHL auto-metrics for the current week
+    metrics.quotesSent = window._ghlQuotesSentThisWeek || 0;
+    metrics.demos = window._ghlDemosThisWeek || 0;
+    metrics.formsSent = window._ghlFormsSentThisWeek || 0;
+    metrics.formsCompleted = window._ghlFormsCompleted || 0;
+    metrics.totalOnboarding = window._ghlTotalOnboarding || 0;
+  } else {
+    // For past weeks, preserve any existing GHL auto-metrics already saved
+    try {
+      var existing = await fetch('/metrics/weekly?week=' + week).then(function(r) { return r.json(); });
+      var em = existing.metrics || {};
+      metrics.quotesSent = em.quotesSent || 0;
+      metrics.demos = em.demos || 0;
+      metrics.formsSent = em.formsSent || 0;
+      metrics.formsCompleted = em.formsCompleted || 0;
+      metrics.totalOnboarding = em.totalOnboarding || 0;
+    } catch(e) {
+      metrics.quotesSent = 0; metrics.demos = 0; metrics.formsSent = 0;
+      metrics.formsCompleted = 0; metrics.totalOnboarding = 0;
+    }
+  }
   await fetch('/metrics/weekly', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ week: week, metrics: metrics })
   });
-  currentWeekMetrics = metrics;
+  if (isCurrentWeek) currentWeekMetrics = metrics;
   closeMetricsModal();
   renderWeeklyMetricsRow();
   // Refresh history table
