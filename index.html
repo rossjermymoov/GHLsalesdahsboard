@@ -532,6 +532,34 @@
             <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Client Referrals</label>
             <input type="number" id="metricReferrals" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
           </div>
+
+          <div style="border-top:1px solid var(--border); margin-top:8px; padding-top:12px;">
+            <div style="font-size:11px; color:var(--muted); margin-bottom:8px; font-style:italic;">GHL auto-captured (override for past weeks if needed)</div>
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+              <div style="flex:1;">
+                <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Quotes Sent</label>
+                <input type="number" id="metricQuotesSent" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+              </div>
+              <div style="flex:1;">
+                <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Demos</label>
+                <input type="number" id="metricDemos" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+              <div style="flex:1;">
+                <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Forms Sent</label>
+                <input type="number" id="metricFormsSent" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+              </div>
+              <div style="flex:1;">
+                <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Forms Completed</label>
+                <input type="number" id="metricFormsCompleted" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+              </div>
+            </div>
+            <div>
+              <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Total Onboarding</label>
+              <input type="number" id="metricTotalOnboarding" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+            </div>
+          </div>
         </div>
         <div style="display:flex; gap:8px; margin-top:20px;">
           <button class="btn-primary" style="flex:1;" onclick="saveWeeklyMetrics()">Save</button>
@@ -1432,15 +1460,30 @@ function renderDashboard() {
   thisWeekStartMgmt.setDate(thisWeekStartMgmt.getDate() - dow + 1);
   thisWeekStartMgmt.setHours(0, 0, 0, 0);
 
-  // Build stage name lookup
+  // Build stage name lookup and order index
   var stageNameLookup = {};
-  stages.forEach(function(s) { stageNameLookup[s.id] = s.name.toLowerCase(); });
+  var stageOrderIdx = {};
+  stages.forEach(function(s, i) {
+    stageNameLookup[s.id] = s.name.toLowerCase();
+    stageOrderIdx[s.id] = i;
+  });
 
+  // Counts deals that have passed through (or are still in) a stage matching `keyword`
+  // AND whose last stage change happened this week. This catches deals moved into
+  // the stage this week (still there) AND deals moved beyond it this week.
   function movedThisWeekToStage(keyword) {
+    // Find the target stage index (first stage whose name contains the keyword)
+    var targetIdx = -1;
+    for (var i = 0; i < stages.length; i++) {
+      if ((stages[i].name || '').toLowerCase().indexOf(keyword) >= 0) { targetIdx = i; break; }
+    }
+    if (targetIdx < 0) return 0;
     return opps.filter(function(o) {
       var sid = o.pipelineStageId || o.stageId;
-      var name = stageNameLookup[sid] || '';
-      if (name.indexOf(keyword) < 0) return false;
+      var idx = stageOrderIdx[sid];
+      if (idx === undefined) return false;
+      // Must currently be at or past the target stage
+      if (idx < targetIdx) return false;
       var moved = new Date(o.lastStageChangeAt || o.updatedAt || o.createdAt);
       return moved >= thisWeekStartMgmt;
     }).length;
@@ -2055,6 +2098,11 @@ function loadMetricsForWeek(week) {
     document.getElementById('metricClientsLive').value = m.clientsLive || '';
     document.getElementById('metricClientsLost').value = m.clientsLost || '';
     document.getElementById('metricReferrals').value = m.referrals || '';
+    document.getElementById('metricQuotesSent').value = m.quotesSent || '';
+    document.getElementById('metricDemos').value = m.demos || '';
+    document.getElementById('metricFormsSent').value = m.formsSent || '';
+    document.getElementById('metricFormsCompleted').value = m.formsCompleted || '';
+    document.getElementById('metricTotalOnboarding').value = m.totalOnboarding || '';
   });
 }
 
@@ -2077,35 +2125,40 @@ function closeMetricsModal() {
 async function saveWeeklyMetrics() {
   var week = document.getElementById('metricsWeekSelect').value;
   var isCurrentWeek = (week === getCurrentWeekKey());
+  // Read whatever the user entered in the override fields. If a field is blank
+  // and we're on the current week, fall back to the live GHL auto-metric.
+  function readOverride(elemId, liveVal) {
+    var raw = document.getElementById(elemId).value;
+    if (raw === '' || raw === null) {
+      return isCurrentWeek ? (liveVal || 0) : 0;
+    }
+    return parseInt(raw) || 0;
+  }
   var metrics = {
     talkTimeHrs: parseInt(document.getElementById('metricTalkHrs').value) || 0,
     talkTimeMins: parseInt(document.getElementById('metricTalkMins').value) || 0,
     totalCalls: parseInt(document.getElementById('metricTotalCalls').value) || 0,
     clientsLive: parseInt(document.getElementById('metricClientsLive').value) || 0,
     clientsLost: parseInt(document.getElementById('metricClientsLost').value) || 0,
-    referrals: parseInt(document.getElementById('metricReferrals').value) || 0
+    referrals: parseInt(document.getElementById('metricReferrals').value) || 0,
+    quotesSent: readOverride('metricQuotesSent', window._ghlQuotesSentThisWeek),
+    demos: readOverride('metricDemos', window._ghlDemosThisWeek),
+    formsSent: readOverride('metricFormsSent', window._ghlFormsSentThisWeek),
+    formsCompleted: readOverride('metricFormsCompleted', window._ghlFormsCompleted),
+    totalOnboarding: readOverride('metricTotalOnboarding', window._ghlTotalOnboarding)
   };
-  if (isCurrentWeek) {
-    // Include live GHL auto-metrics for the current week
-    metrics.quotesSent = window._ghlQuotesSentThisWeek || 0;
-    metrics.demos = window._ghlDemosThisWeek || 0;
-    metrics.formsSent = window._ghlFormsSentThisWeek || 0;
-    metrics.formsCompleted = window._ghlFormsCompleted || 0;
-    metrics.totalOnboarding = window._ghlTotalOnboarding || 0;
-  } else {
-    // For past weeks, preserve any existing GHL auto-metrics already saved
+  // For past weeks, if user left a field blank, preserve any value already saved
+  if (!isCurrentWeek) {
     try {
       var existing = await fetch('/metrics/weekly?week=' + week).then(function(r) { return r.json(); });
       var em = existing.metrics || {};
-      metrics.quotesSent = em.quotesSent || 0;
-      metrics.demos = em.demos || 0;
-      metrics.formsSent = em.formsSent || 0;
-      metrics.formsCompleted = em.formsCompleted || 0;
-      metrics.totalOnboarding = em.totalOnboarding || 0;
-    } catch(e) {
-      metrics.quotesSent = 0; metrics.demos = 0; metrics.formsSent = 0;
-      metrics.formsCompleted = 0; metrics.totalOnboarding = 0;
-    }
+      ['quotesSent','demos','formsSent','formsCompleted','totalOnboarding'].forEach(function(k) {
+        var elemMap = {quotesSent:'metricQuotesSent', demos:'metricDemos', formsSent:'metricFormsSent', formsCompleted:'metricFormsCompleted', totalOnboarding:'metricTotalOnboarding'};
+        if (document.getElementById(elemMap[k]).value === '') {
+          metrics[k] = em[k] || 0;
+        }
+      });
+    } catch(e) {}
   }
   await fetch('/metrics/weekly', {
     method: 'POST',
