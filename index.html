@@ -2123,17 +2123,17 @@ async function saveWeeklyMetrics() {
 
 async function seedHistoricalData() {
   var historicalData = {
-    "2026-W02": {"totalCalls":564,"talkTimeHrs":14,"talkTimeMins":10,"quotesSent":8,"demos":2,"formsSent":4,"formsCompleted":4,"totalOnboarding":21,"clientsLive":0,"clientsLost":0,"referrals":0},
-    "2026-W03": {"totalCalls":551,"talkTimeHrs":17,"talkTimeMins":16,"quotesSent":8,"demos":9,"formsSent":8,"formsCompleted":4,"totalOnboarding":23,"clientsLive":1,"clientsLost":0,"referrals":0},
-    "2026-W04": {"totalCalls":505,"talkTimeHrs":14,"talkTimeMins":24,"quotesSent":8,"demos":3,"formsSent":3,"formsCompleted":4,"totalOnboarding":23,"clientsLive":3,"clientsLost":1,"referrals":0},
-    "2026-W05": {"totalCalls":498,"talkTimeHrs":17,"talkTimeMins":14,"quotesSent":10,"demos":7,"formsSent":4,"formsCompleted":3,"totalOnboarding":20,"clientsLive":2,"clientsLost":1,"referrals":0},
-    "2026-W06": {"totalCalls":426,"talkTimeHrs":12,"talkTimeMins":36,"quotesSent":12,"demos":0,"formsSent":2,"formsCompleted":2,"totalOnboarding":16,"clientsLive":2,"clientsLost":0,"referrals":0},
-    "2026-W07": {"totalCalls":585,"talkTimeHrs":14,"talkTimeMins":6,"quotesSent":14,"demos":1,"formsSent":1,"formsCompleted":1,"totalOnboarding":13,"clientsLive":3,"clientsLost":0,"referrals":1},
-    "2026-W08": {"totalCalls":541,"talkTimeHrs":18,"talkTimeMins":51,"quotesSent":12,"demos":8,"formsSent":5,"formsCompleted":3,"totalOnboarding":14,"clientsLive":2,"clientsLost":2,"referrals":0},
-    "2026-W09": {"totalCalls":526,"talkTimeHrs":15,"talkTimeMins":35,"quotesSent":7,"demos":3,"formsSent":2,"formsCompleted":1,"totalOnboarding":12,"clientsLive":3,"clientsLost":0,"referrals":0},
-    "2026-W10": {"totalCalls":586,"talkTimeHrs":14,"talkTimeMins":55,"quotesSent":5,"demos":2,"formsSent":1,"formsCompleted":2,"totalOnboarding":13,"clientsLive":1,"clientsLost":0,"referrals":0},
-    "2026-W11": {"totalCalls":364,"talkTimeHrs":11,"talkTimeMins":29,"quotesSent":4,"demos":3,"formsSent":1,"formsCompleted":1,"totalOnboarding":14,"clientsLive":0,"clientsLost":0,"referrals":0},
-    "2026-W12": {"totalCalls":514,"talkTimeHrs":13,"talkTimeMins":47,"quotesSent":3,"demos":3,"formsSent":1,"formsCompleted":1,"totalOnboarding":13,"clientsLive":1,"clientsLost":0,"referrals":0}
+    "2026-W01": {"totalCalls":564,"talkTimeHrs":14,"talkTimeMins":10,"quotesSent":8,"demos":2,"formsSent":4,"formsCompleted":4,"totalOnboarding":21,"clientsLive":0,"clientsLost":0,"referrals":0},
+    "2026-W02": {"totalCalls":551,"talkTimeHrs":17,"talkTimeMins":16,"quotesSent":8,"demos":9,"formsSent":8,"formsCompleted":4,"totalOnboarding":23,"clientsLive":1,"clientsLost":0,"referrals":0},
+    "2026-W03": {"totalCalls":505,"talkTimeHrs":14,"talkTimeMins":24,"quotesSent":8,"demos":3,"formsSent":3,"formsCompleted":4,"totalOnboarding":23,"clientsLive":3,"clientsLost":1,"referrals":0},
+    "2026-W04": {"totalCalls":498,"talkTimeHrs":17,"talkTimeMins":14,"quotesSent":10,"demos":7,"formsSent":4,"formsCompleted":3,"totalOnboarding":20,"clientsLive":2,"clientsLost":1,"referrals":0},
+    "2026-W05": {"totalCalls":426,"talkTimeHrs":12,"talkTimeMins":36,"quotesSent":12,"demos":0,"formsSent":2,"formsCompleted":2,"totalOnboarding":16,"clientsLive":2,"clientsLost":0,"referrals":0},
+    "2026-W06": {"totalCalls":585,"talkTimeHrs":14,"talkTimeMins":6,"quotesSent":14,"demos":1,"formsSent":1,"formsCompleted":1,"totalOnboarding":13,"clientsLive":3,"clientsLost":0,"referrals":1},
+    "2026-W07": {"totalCalls":541,"talkTimeHrs":18,"talkTimeMins":51,"quotesSent":12,"demos":8,"formsSent":5,"formsCompleted":3,"totalOnboarding":14,"clientsLive":2,"clientsLost":2,"referrals":0},
+    "2026-W08": {"totalCalls":526,"talkTimeHrs":15,"talkTimeMins":35,"quotesSent":7,"demos":3,"formsSent":2,"formsCompleted":1,"totalOnboarding":12,"clientsLive":3,"clientsLost":0,"referrals":0},
+    "2026-W09": {"totalCalls":586,"talkTimeHrs":14,"talkTimeMins":55,"quotesSent":5,"demos":2,"formsSent":1,"formsCompleted":2,"totalOnboarding":13,"clientsLive":1,"clientsLost":0,"referrals":0},
+    "2026-W10": {"totalCalls":364,"talkTimeHrs":11,"talkTimeMins":29,"quotesSent":4,"demos":3,"formsSent":1,"formsCompleted":1,"totalOnboarding":14,"clientsLive":0,"clientsLost":0,"referrals":0},
+    "2026-W11": {"totalCalls":514,"talkTimeHrs":13,"talkTimeMins":47,"quotesSent":3,"demos":3,"formsSent":1,"formsCompleted":1,"totalOnboarding":13,"clientsLive":1,"clientsLost":0,"referrals":0}
   };
   try {
     var resp = await fetch('/metrics/weekly/seed', {
