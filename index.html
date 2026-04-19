@@ -1472,22 +1472,13 @@ function renderDashboard() {
     stageOrderIdx[s.id] = i;
   });
 
-  // Counts deals that have passed through (or are still in) a stage matching `keyword`
-  // AND whose last stage change happened this week. This catches deals moved into
-  // the stage this week (still there) AND deals moved beyond it this week.
+  // Counts deals currently IN a stage matching `keyword` whose last
+  // stage change happened within the reporting week.
   function movedThisWeekToStage(keyword) {
-    // Find the target stage index (first stage whose name contains the keyword)
-    var targetIdx = -1;
-    for (var i = 0; i < stages.length; i++) {
-      if ((stages[i].name || '').toLowerCase().indexOf(keyword) >= 0) { targetIdx = i; break; }
-    }
-    if (targetIdx < 0) return 0;
     return opps.filter(function(o) {
       var sid = o.pipelineStageId || o.stageId;
-      var idx = stageOrderIdx[sid];
-      if (idx === undefined) return false;
-      // Must currently be at or past the target stage
-      if (idx < targetIdx) return false;
+      var name = stageNameLookup[sid] || '';
+      if (name.indexOf(keyword) < 0) return false;
       var moved = new Date(o.lastStageChangeAt || o.updatedAt || o.createdAt);
       return moved >= thisWeekStartMgmt;
     }).length;
