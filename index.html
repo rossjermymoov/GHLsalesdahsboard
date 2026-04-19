@@ -71,7 +71,7 @@
   .main { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
 
   /* KPI Row */
-  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 24px; }
   .kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; position: relative; cursor: default; }
   .kpi-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 8px; }
   .kpi-value { font-size: 28px; font-weight: 700; }
@@ -456,7 +456,7 @@
   <div class="main">
     <!-- Weekly Management Metrics -->
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
-      <span style="font-size:14px; font-weight:600; color:var(--text);">Live GHL Metrics — <span id="mgmtWeekDisplay"></span></span>
+      <span style="font-size:14px; font-weight:600; color:var(--text);">Weekly Performance — <span id="mgmtWeekDisplay"></span></span>
       <div style="display:flex; gap:8px;">
         <button class="btn-sm" onclick="openMetricsModal()" style="font-size:11px; padding:4px 12px;">Enter Manual Stats</button>
         <button class="btn-sm" id="seedHistoryBtn" onclick="seedHistoricalData()" style="font-size:11px; padding:4px 12px; display:none;">Import History</button>
@@ -555,9 +555,15 @@
                 <input type="number" id="metricFormsCompleted" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
               </div>
             </div>
-            <div>
-              <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Total Onboarding</label>
-              <input type="number" id="metricTotalOnboarding" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+              <div style="flex:1;">
+                <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">Total Onboarding</label>
+                <input type="number" id="metricTotalOnboarding" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+              </div>
+              <div style="flex:1;">
+                <label style="font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:4px;">New Opportunities</label>
+                <input type="number" id="metricNewOpps" min="0" placeholder="0" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px;">
+              </div>
             </div>
           </div>
         </div>
@@ -1494,6 +1500,9 @@ function renderDashboard() {
   window._ghlFormsCompleted = movedThisWeekToStage('assigned to onboarding');
   window._ghlQuotesSentThisWeek = movedThisWeekToStage('pricing sent');
   window._ghlTotalOnboarding = opps.filter(function(o) { return onboardingStageIds[o.pipelineStageId || o.stageId]; }).length;
+  window._ghlNewOppsThisWeek = opps.filter(function(o) {
+    return o.createdAt && new Date(o.createdAt) >= thisWeekStartMgmt;
+  }).length;
 
   // Auto-save GHL metrics to this week's record (so history stays up to date)
   if (isManagerUser || isAdminUser) {
@@ -1502,7 +1511,8 @@ function renderDashboard() {
       demos: window._ghlDemosThisWeek,
       formsSent: window._ghlFormsSentThisWeek,
       formsCompleted: window._ghlFormsCompleted,
-      totalOnboarding: window._ghlTotalOnboarding
+      totalOnboarding: window._ghlTotalOnboarding,
+      newOpps: window._ghlNewOppsThisWeek
     };
     fetch('/metrics/weekly', {
       method: 'POST',
@@ -2103,6 +2113,7 @@ function loadMetricsForWeek(week) {
     document.getElementById('metricFormsSent').value = m.formsSent || '';
     document.getElementById('metricFormsCompleted').value = m.formsCompleted || '';
     document.getElementById('metricTotalOnboarding').value = m.totalOnboarding || '';
+    document.getElementById('metricNewOpps').value = m.newOpps || '';
   });
 }
 
@@ -2145,15 +2156,16 @@ async function saveWeeklyMetrics() {
     demos: readOverride('metricDemos', window._ghlDemosThisWeek),
     formsSent: readOverride('metricFormsSent', window._ghlFormsSentThisWeek),
     formsCompleted: readOverride('metricFormsCompleted', window._ghlFormsCompleted),
-    totalOnboarding: readOverride('metricTotalOnboarding', window._ghlTotalOnboarding)
+    totalOnboarding: readOverride('metricTotalOnboarding', window._ghlTotalOnboarding),
+    newOpps: readOverride('metricNewOpps', window._ghlNewOppsThisWeek)
   };
   // For past weeks, if user left a field blank, preserve any value already saved
   if (!isCurrentWeek) {
     try {
       var existing = await fetch('/metrics/weekly?week=' + week).then(function(r) { return r.json(); });
       var em = existing.metrics || {};
-      ['quotesSent','demos','formsSent','formsCompleted','totalOnboarding'].forEach(function(k) {
-        var elemMap = {quotesSent:'metricQuotesSent', demos:'metricDemos', formsSent:'metricFormsSent', formsCompleted:'metricFormsCompleted', totalOnboarding:'metricTotalOnboarding'};
+      ['quotesSent','demos','formsSent','formsCompleted','totalOnboarding','newOpps'].forEach(function(k) {
+        var elemMap = {quotesSent:'metricQuotesSent', demos:'metricDemos', formsSent:'metricFormsSent', formsCompleted:'metricFormsCompleted', totalOnboarding:'metricTotalOnboarding', newOpps:'metricNewOpps'};
         if (document.getElementById(elemMap[k]).value === '') {
           metrics[k] = em[k] || 0;
         }
@@ -2218,34 +2230,131 @@ function cardGlow(value, targetKey) {
 }
 
 function renderWeeklyMetricsRow() {
-  // GHL auto metrics only — manual metrics show in history table
-  var demosThisWeek = window._ghlDemosThisWeek || 0;
-  var formsSentThisWeek = window._ghlFormsSentThisWeek || 0;
-  var formsCompleted = window._ghlFormsCompleted || 0;
-  var quotesSent = window._ghlQuotesSentThisWeek || 0;
-  var totalOnboarding = window._ghlTotalOnboarding || 0;
+  // Fetch all historical data to compute WoW and 3-month rolling average
+  fetch('/metrics/weekly/all').then(function(r) { return r.json(); }).then(function(data) {
+    var allMetrics = data.metrics || {};
+    var currentWeek = getCurrentWeekKey();
 
-  var cards = [
-    { label: 'Quotes Sent', value: quotesSent, targetKey: 'quotesSent' },
-    { label: 'Demos This Week', value: demosThisWeek, targetKey: 'demos' },
-    { label: 'Acct Forms Sent', value: formsSentThisWeek, targetKey: 'formsSent' },
-    { label: 'Acct Forms Completed', value: formsCompleted, targetKey: 'formsCompleted' },
-    { label: 'In Onboarding', value: totalOnboarding, targetKey: null }
-  ];
+    // Get sorted week keys
+    var weekKeys = Object.keys(allMetrics).sort();
 
-  document.getElementById('weeklyMetricsRow').innerHTML = cards.map(function(c) {
-    var glow = c.targetKey ? cardGlow(c.value, c.targetKey) : '';
-    var targetInfo = '';
-    if (c.targetKey && METRICS_TARGETS[c.targetKey]) {
-      var t = METRICS_TARGETS[c.targetKey];
-      targetInfo = '<div class="kpi-sub" style="font-size:10px; color:var(--muted);">Target: ' + t.target + '</div>';
+    // Find previous week key (the one before current in the sorted list)
+    var currentIdx = weekKeys.indexOf(currentWeek);
+    var prevWeekKey = currentIdx > 0 ? weekKeys[currentIdx - 1] : null;
+    var prevMetrics = prevWeekKey ? allMetrics[prevWeekKey] : {};
+
+    // Compute 3-month rolling average (last ~13 weeks, excluding current)
+    var rollingWeeks = weekKeys.filter(function(w) { return w < currentWeek; }).slice(-13);
+    function rollingAvg(metricKey) {
+      if (rollingWeeks.length === 0) return null;
+      var sum = 0;
+      rollingWeeks.forEach(function(w) { sum += (allMetrics[w][metricKey] || 0); });
+      return Math.round((sum / rollingWeeks.length) * 10) / 10;
     }
-    return '<div class="kpi-card" style="' + glow + '">'
-      + '<div class="kpi-label">' + c.label + '</div>'
-      + '<div class="kpi-value" style="font-size:20px;">' + c.value + '</div>'
-      + targetInfo
-      + '</div>';
-  }).join('');
+
+    // Build current week values — merge live GHL data with saved manual data
+    var savedCurrent = allMetrics[currentWeek] || {};
+    var thisWeek = {
+      totalCalls: savedCurrent.totalCalls || 0,
+      talkTimeMins: ((savedCurrent.talkTimeHrs || 0) * 60) + (savedCurrent.talkTimeMins || 0),
+      quotesSent: window._ghlQuotesSentThisWeek || savedCurrent.quotesSent || 0,
+      demos: window._ghlDemosThisWeek || savedCurrent.demos || 0,
+      formsSent: window._ghlFormsSentThisWeek || savedCurrent.formsSent || 0,
+      formsCompleted: window._ghlFormsCompleted || savedCurrent.formsCompleted || 0,
+      totalOnboarding: window._ghlTotalOnboarding || savedCurrent.totalOnboarding || 0,
+      newOpps: window._ghlNewOppsThisWeek || savedCurrent.newOpps || 0,
+      clientsLive: savedCurrent.clientsLive || 0,
+      clientsLost: savedCurrent.clientsLost || 0,
+      referrals: savedCurrent.referrals || 0
+    };
+
+    // Helper: get a metric's previous week value
+    function prevVal(metricKey) {
+      if (!prevMetrics) return null;
+      if (metricKey === 'talkTimeMins') return ((prevMetrics.talkTimeHrs || 0) * 60) + (prevMetrics.talkTimeMins || 0);
+      return prevMetrics[metricKey] || 0;
+    }
+
+    // Helper: format talk time in h:mm
+    function fmtTalkTime(mins) {
+      var h = Math.floor(mins / 60);
+      var m = mins % 60;
+      return h + 'h ' + String(m).padStart(2, '0') + 'm';
+    }
+
+    // Rolling average for talk time needs special handling
+    function rollingAvgTalkTime() {
+      if (rollingWeeks.length === 0) return null;
+      var sum = 0;
+      rollingWeeks.forEach(function(w) {
+        var m = allMetrics[w];
+        sum += ((m.talkTimeHrs || 0) * 60) + (m.talkTimeMins || 0);
+      });
+      return Math.round(sum / rollingWeeks.length);
+    }
+
+    var cards = [
+      { label: 'New Opportunities', key: 'newOpps', value: thisWeek.newOpps, targetKey: null },
+      { label: 'Total Calls', key: 'totalCalls', value: thisWeek.totalCalls, targetKey: 'totalCalls' },
+      { label: 'Talk Time', key: 'talkTimeMins', value: thisWeek.talkTimeMins, targetKey: 'talkTimeMins', isTalkTime: true },
+      { label: 'Quotes Sent', key: 'quotesSent', value: thisWeek.quotesSent, targetKey: 'quotesSent' },
+      { label: 'Demos', key: 'demos', value: thisWeek.demos, targetKey: 'demos' },
+      { label: 'Acct Forms Sent', key: 'formsSent', value: thisWeek.formsSent, targetKey: 'formsSent' },
+      { label: 'Acct Forms Done', key: 'formsCompleted', value: thisWeek.formsCompleted, targetKey: 'formsCompleted' },
+      { label: 'In Onboarding', key: 'totalOnboarding', value: thisWeek.totalOnboarding, targetKey: null },
+      { label: 'Clients Live', key: 'clientsLive', value: thisWeek.clientsLive, targetKey: 'clientsLive' },
+      { label: 'Clients Lost', key: 'clientsLost', value: thisWeek.clientsLost, targetKey: 'clientsLost' },
+      { label: 'Referrals', key: 'referrals', value: thisWeek.referrals, targetKey: 'referrals' }
+    ];
+
+    document.getElementById('weeklyMetricsRow').innerHTML = cards.map(function(c) {
+      var glow = c.targetKey ? cardGlow(c.value, c.targetKey) : '';
+      var displayVal = c.isTalkTime ? fmtTalkTime(c.value) : c.value;
+
+      // Week on week change
+      var prev = prevVal(c.key);
+      var wowHtml = '';
+      if (prev !== null && prev !== undefined) {
+        var diff = c.value - prev;
+        var pct = prev > 0 ? Math.round((diff / prev) * 100) : (diff > 0 ? 100 : 0);
+        var arrow = diff > 0 ? '&#9650;' : (diff < 0 ? '&#9660;' : '&#9644;');
+        // For clientsLost, up is bad; for everything else, up is good
+        var isGood = c.key === 'clientsLost' ? diff <= 0 : diff >= 0;
+        var wowColor = diff === 0 ? 'var(--muted)' : (isGood ? 'var(--green)' : 'var(--red)');
+        var prevDisplay = c.isTalkTime ? fmtTalkTime(prev) : prev;
+        var diffDisplay = c.isTalkTime ? fmtTalkTime(Math.abs(diff)) : Math.abs(diff);
+        var sign = diff > 0 ? '+' : (diff < 0 ? '-' : '');
+        wowHtml = '<div style="font-size:11px; color:' + wowColor + '; margin-top:4px;">'
+          + arrow + ' ' + sign + diffDisplay + ' (' + (pct > 0 ? '+' : '') + pct + '%)'
+          + '</div>'
+          + '<div style="font-size:10px; color:var(--muted);">Last wk: ' + prevDisplay + '</div>';
+      }
+
+      // 3-month rolling average
+      var avg = c.isTalkTime ? rollingAvgTalkTime() : rollingAvg(c.key);
+      var avgHtml = '';
+      if (avg !== null) {
+        var avgDisplay = c.isTalkTime ? fmtTalkTime(avg) : avg;
+        avgHtml = '<div style="font-size:10px; color:var(--muted); margin-top:4px; border-top:1px solid var(--border); padding-top:4px;">3m avg: <strong>' + avgDisplay + '</strong></div>';
+      }
+
+      // Target line
+      var targetHtml = '';
+      if (c.targetKey && METRICS_TARGETS[c.targetKey]) {
+        var t = METRICS_TARGETS[c.targetKey];
+        var tVal = c.key === 'talkTimeMins' ? fmtTalkTime(t.target) : t.target;
+        targetHtml = '<div style="font-size:10px; color:var(--muted);">Target: ' + tVal + '</div>';
+      }
+
+      return '<div class="kpi-card" style="' + glow + ' min-width:140px;">'
+        + '<div class="kpi-label">' + c.label + '</div>'
+        + '<div class="kpi-value" style="font-size:20px;">' + displayVal + '</div>'
+        + targetHtml
+        + wowHtml
+        + avgHtml
+        + '</div>';
+    }).join('');
+  }).catch(function(err) { console.error('Failed to render metrics row:', err); });
 }
 
 // ── Metrics History ──
