@@ -2442,17 +2442,18 @@ function renderWeeklyMetricsRow() {
       return Math.round((sum / rollingWeeks.length) * 10) / 10;
     }
 
-    // Build reporting week values — merge live GHL data with saved manual data
+    // Build reporting week values from saved data (includes auto-saved GHL
+    // values and any manual overrides — saved data always takes precedence)
     var savedCurrent = allMetrics[reportingWeek] || {};
     var thisWeek = {
       totalCalls: savedCurrent.totalCalls || 0,
       talkTimeMins: ((savedCurrent.talkTimeHrs || 0) * 60) + (savedCurrent.talkTimeMins || 0),
-      quotesSent: window._ghlQuotesSentThisWeek || savedCurrent.quotesSent || 0,
-      demos: window._ghlDemosThisWeek || savedCurrent.demos || 0,
-      formsSent: window._ghlFormsSentThisWeek || savedCurrent.formsSent || 0,
-      formsCompleted: window._ghlFormsCompleted || savedCurrent.formsCompleted || 0,
-      totalOnboarding: window._ghlTotalOnboarding || savedCurrent.totalOnboarding || 0,
-      newOpps: window._ghlNewOppsThisWeek || savedCurrent.newOpps || 0,
+      quotesSent: savedCurrent.quotesSent || 0,
+      demos: savedCurrent.demos || 0,
+      formsSent: savedCurrent.formsSent || 0,
+      formsCompleted: savedCurrent.formsCompleted || 0,
+      totalOnboarding: savedCurrent.totalOnboarding || 0,
+      newOpps: savedCurrent.newOpps || 0,
       clientsLive: savedCurrent.clientsLive || 0,
       clientsLost: savedCurrent.clientsLost || 0,
       referrals: savedCurrent.referrals || 0
