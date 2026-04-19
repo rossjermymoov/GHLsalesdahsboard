@@ -1461,10 +1461,8 @@ function renderDashboard() {
   renderActiveLeads(opps, stages, closedLostStageIds);
 
   // ── GHL Auto Metrics for Weekly Management Row ──
-  var thisWeekStartMgmt = new Date();
-  var dow = thisWeekStartMgmt.getDay() || 7;
-  thisWeekStartMgmt.setDate(thisWeekStartMgmt.getDate() - dow + 1);
-  thisWeekStartMgmt.setHours(0, 0, 0, 0);
+  // Use reporting-week Monday so GHL filters align with the dashboard week
+  var thisWeekStartMgmt = getReportingWeekMonday();
 
   // Build stage name lookup and order index
   var stageNameLookup = {};
@@ -2060,21 +2058,45 @@ function renderWeekOnWeek(opps, stages, onbStageIds, lostStageIds) {
 }
 
 // ── Weekly Management Metrics ──
-function getCurrentWeekKey() {
+// Reporting week = Mon-Sun. The "current" reporting week is the one
+// containing the most recent Sunday. This means the week only rolls
+// over when a new Sunday arrives (Sun through Sat you see the same week).
+function getReportingWeekMonday() {
   var now = new Date();
-  var jan1 = new Date(now.getFullYear(), 0, 1);
-  var days = Math.floor((now - jan1) / 86400000);
+  now.setHours(0, 0, 0, 0);
+  var dow = now.getDay(); // 0=Sun, 1=Mon, ...
+  // Find the most recent Sunday (including today if Sunday)
+  var recentSunday = new Date(now);
+  recentSunday.setDate(now.getDate() - dow); // dow=0 → today, dow=1 → yesterday, etc.
+  // The Monday of that reporting week is 6 days before that Sunday
+  var monday = new Date(recentSunday);
+  monday.setDate(recentSunday.getDate() - 6);
+  return monday;
+}
+
+function dateToWeekKey(monday) {
+  var jan1 = new Date(monday.getFullYear(), 0, 1);
+  var days = Math.floor((monday - jan1) / 86400000);
   var weekNum = Math.ceil((days + jan1.getDay() + 1) / 7);
-  return now.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+  return monday.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+}
+
+function getCurrentWeekKey() {
+  return dateToWeekKey(getReportingWeekMonday());
 }
 
 var currentWeekMetrics = {};
 
 function getWeekKeyForDate(date) {
-  var jan1 = new Date(date.getFullYear(), 0, 1);
-  var days = Math.floor((date - jan1) / 86400000);
-  var weekNum = Math.ceil((days + jan1.getDay() + 1) / 7);
-  return date.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+  // For the week selector: given a date, find its reporting-week Monday
+  var d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  var dow = d.getDay();
+  var recentSunday = new Date(d);
+  recentSunday.setDate(d.getDate() - dow);
+  var monday = new Date(recentSunday);
+  monday.setDate(recentSunday.getDate() - 6);
+  return dateToWeekKey(monday);
 }
 
 function populateWeekSelector(selectedWeek) {
