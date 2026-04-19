@@ -1294,15 +1294,15 @@ function renderDashboard() {
   // Combine pipeline + onboarding for total opps tooltip
   var totalOppsDeals = pipelineOpps.concat(onboardedOpps);
 
-  // Count new contacts this week (all opps by createdAt, unfiltered by status)
+  // New contacts this week (all opps by createdAt, unfiltered by status)
   var kpiWeekStart = getReportingWeekMonday();
-  var newContactsThisWeek = allOpportunities.filter(function(o) {
+  var newContactsList = allOpportunities.filter(function(o) {
     return o.createdAt && new Date(o.createdAt) >= kpiWeekStart && isAllowedStageId(o.pipelineStageId || o.stageId);
-  }).length;
+  });
 
   const kpis = [
     { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: pipelineOpps.length + ' in pipeline / ' + onboardedOpps.length + ' onboarding', tooltip: dealTooltip('All Opportunities', totalOppsDeals) },
-    { label: 'New Contacts This Week', value: newContactsThisWeek.toLocaleString(), sub: 'contacts added this week', tooltip: '' },
+    { label: 'New Contacts This Week', value: newContactsList.length.toLocaleString(), sub: 'contacts added this week', tooltip: dealTooltip('New This Week', newContactsList) },
     { label: 'Onboarding Margin', value: '£' + onboardedValue.toLocaleString(), sub: onboardedOpps.length + ' moved to onboarding', tooltip: dealTooltip('Onboarding Deals', onboardedOpps) },
     { label: 'Win Rate (28d)', value: pct28Won + '%', sub: 'Won ' + pct28Won + '% | Lost ' + pct28Lost + '% | Open ' + pct28Open + '%', tooltip: dealTooltip('Won (28d)', last28Won, 'Lost (28d)', last28Lost) },
     { label: 'Avg Deal Margin', value: '£' + avgDealValue.toLocaleString(undefined, {maximumFractionDigits:0}), sub: 'from ' + onboardedOpps.length + ' onboarded deals', tooltip: dealTooltip('Onboarded Deals', onboardedOpps) },
