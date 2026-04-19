@@ -56,19 +56,11 @@ function verifyPassword(password, hash, salt) {
 }
 
 function getCurrentWeek() {
-  // Reporting week = Mon-Sun. Current reporting week is the one containing
-  // the most recent Sunday. Rolls over when a new Sunday arrives.
   const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const dow = now.getDay(); // 0=Sun
-  const recentSunday = new Date(now);
-  recentSunday.setDate(now.getDate() - dow);
-  const monday = new Date(recentSunday);
-  monday.setDate(recentSunday.getDate() - 6);
-  const jan1 = new Date(monday.getFullYear(), 0, 1);
-  const days = Math.floor((monday - jan1) / 86400000);
+  const jan1 = new Date(now.getFullYear(), 0, 1);
+  const days = Math.floor((now - jan1) / 86400000);
   const weekNum = Math.ceil((days + jan1.getDay() + 1) / 7);
-  return monday.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+  return now.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
 }
 
 function generateCode() { return crypto.randomBytes(3).toString('hex').toUpperCase(); }

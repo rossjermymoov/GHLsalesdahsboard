@@ -977,14 +977,14 @@ function switchTab(tab) {
       var seedBtn = document.getElementById('seedHistoryBtn');
       if (seedBtn) seedBtn.style.display = '';
     }
-    // Update week display and load metrics
-    var week = getCurrentWeekKey();
+    // Update week display and load metrics for the reporting week
+    var reportWeek = getReportingWeekKey();
     var weekEl = document.getElementById('mgmtWeekDisplay');
-    if (weekEl) weekEl.textContent = weekKeyToWC(week);
-    fetch('/metrics/weekly?week=' + week).then(function(r) { return r.json(); }).then(function(data) {
+    if (weekEl) weekEl.textContent = weekKeyToWC(reportWeek);
+    fetch('/metrics/weekly?week=' + reportWeek).then(function(r) { return r.json(); }).then(function(data) {
       currentWeekMetrics = data.metrics || {};
       renderWeeklyMetricsRow();
-      // If manual stats not entered this week, prompt
+      // If manual stats not entered for reporting week, prompt
       if (!currentWeekMetrics.totalCalls && !currentWeekMetrics.talkTimeHrs) {
         openMetricsModal();
       }
@@ -1515,7 +1515,7 @@ function renderDashboard() {
     fetch('/metrics/weekly', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ week: getCurrentWeekKey(), metrics: autoMetrics })
+      body: JSON.stringify({ week: getReportingWeekKey(), metrics: autoMetrics })
     }).catch(function() {});
   }
 
@@ -2058,46 +2058,41 @@ function renderWeekOnWeek(opps, stages, onbStageIds, lostStageIds) {
 }
 
 // ── Weekly Management Metrics ──
-// Reporting week = Mon-Sun. The "current" reporting week is the one
-// containing the most recent Sunday. This means the week only rolls
-// over when a new Sunday arrives (Sun through Sat you see the same week).
+// getCurrentWeekKey: standard week key based on today (used for data storage, auto-save, etc.)
+function getCurrentWeekKey() {
+  var now = new Date();
+  var jan1 = new Date(now.getFullYear(), 0, 1);
+  var days = Math.floor((now - jan1) / 86400000);
+  var weekNum = Math.ceil((days + jan1.getDay() + 1) / 7);
+  return now.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+}
+
+function getWeekKeyForDate(date) {
+  var jan1 = new Date(date.getFullYear(), 0, 1);
+  var days = Math.floor((date - jan1) / 86400000);
+  var weekNum = Math.ceil((days + jan1.getDay() + 1) / 7);
+  return date.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+}
+
+// Reporting week = last full Mon-Sun week. Used for KPI card display
+// and GHL metric filtering. Rolls over on Sunday.
 function getReportingWeekMonday() {
   var now = new Date();
   now.setHours(0, 0, 0, 0);
   var dow = now.getDay(); // 0=Sun, 1=Mon, ...
-  // Find the most recent Sunday (including today if Sunday)
   var recentSunday = new Date(now);
-  recentSunday.setDate(now.getDate() - dow); // dow=0 → today, dow=1 → yesterday, etc.
-  // The Monday of that reporting week is 6 days before that Sunday
+  recentSunday.setDate(now.getDate() - dow);
   var monday = new Date(recentSunday);
   monday.setDate(recentSunday.getDate() - 6);
   return monday;
 }
 
-function dateToWeekKey(monday) {
-  var jan1 = new Date(monday.getFullYear(), 0, 1);
-  var days = Math.floor((monday - jan1) / 86400000);
-  var weekNum = Math.ceil((days + jan1.getDay() + 1) / 7);
-  return monday.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
-}
-
-function getCurrentWeekKey() {
-  return dateToWeekKey(getReportingWeekMonday());
+function getReportingWeekKey() {
+  var monday = getReportingWeekMonday();
+  return getWeekKeyForDate(monday);
 }
 
 var currentWeekMetrics = {};
-
-function getWeekKeyForDate(date) {
-  // For the week selector: given a date, find its reporting-week Monday
-  var d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  var dow = d.getDay();
-  var recentSunday = new Date(d);
-  recentSunday.setDate(d.getDate() - dow);
-  var monday = new Date(recentSunday);
-  monday.setDate(recentSunday.getDate() - 6);
-  return dateToWeekKey(monday);
-}
 
 function populateWeekSelector(selectedWeek) {
   var select = document.getElementById('metricsWeekSelect');
@@ -2255,18 +2250,23 @@ function renderWeeklyMetricsRow() {
   // Fetch all historical data to compute WoW and 3-month rolling average
   fetch('/metrics/weekly/all').then(function(r) { return r.json(); }).then(function(data) {
     var allMetrics = data.metrics || {};
-    var currentWeek = getCurrentWeekKey();
+    // Use the reporting week (last full Mon-Sun) for KPI display
+    var reportingWeek = getReportingWeekKey();
+
+    // Update the header to show which week we're displaying
+    var mgmtLabel = document.getElementById('mgmtWeekDisplay');
+    if (mgmtLabel) mgmtLabel.textContent = weekKeyToWC(reportingWeek);
 
     // Get sorted week keys
     var weekKeys = Object.keys(allMetrics).sort();
 
-    // Find previous week key (the one before current in the sorted list)
-    var currentIdx = weekKeys.indexOf(currentWeek);
-    var prevWeekKey = currentIdx > 0 ? weekKeys[currentIdx - 1] : null;
+    // Find previous week key (the one before the reporting week)
+    var reportIdx = weekKeys.indexOf(reportingWeek);
+    var prevWeekKey = reportIdx > 0 ? weekKeys[reportIdx - 1] : null;
     var prevMetrics = prevWeekKey ? allMetrics[prevWeekKey] : {};
 
-    // Compute 3-month rolling average (last ~13 weeks, excluding current)
-    var rollingWeeks = weekKeys.filter(function(w) { return w < currentWeek; }).slice(-13);
+    // Compute 3-month rolling average (last ~13 weeks, excluding reporting week)
+    var rollingWeeks = weekKeys.filter(function(w) { return w < reportingWeek; }).slice(-13);
     function rollingAvg(metricKey) {
       if (rollingWeeks.length === 0) return null;
       var sum = 0;
@@ -2274,8 +2274,8 @@ function renderWeeklyMetricsRow() {
       return Math.round((sum / rollingWeeks.length) * 10) / 10;
     }
 
-    // Build current week values — merge live GHL data with saved manual data
-    var savedCurrent = allMetrics[currentWeek] || {};
+    // Build reporting week values — merge live GHL data with saved manual data
+    var savedCurrent = allMetrics[reportingWeek] || {};
     var thisWeek = {
       totalCalls: savedCurrent.totalCalls || 0,
       talkTimeMins: ((savedCurrent.talkTimeHrs || 0) * 60) + (savedCurrent.talkTimeMins || 0),
