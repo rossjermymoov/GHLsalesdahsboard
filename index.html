@@ -464,6 +464,9 @@
     </div>
     <div class="kpi-row" id="weeklyMetricsRow" style="margin-bottom:24px;"></div>
 
+    <!-- Key Insights -->
+    <div id="keyInsights" style="margin-bottom:24px;"></div>
+
     <!-- Metrics History -->
     <div class="table-card" style="margin-bottom:24px;">
       <h3>Metrics History</h3>
@@ -491,6 +494,10 @@
         <span style="color:var(--green);">&#9679;</span> On/above target &nbsp;
         <span style="color:var(--red);">&#9679;</span> Below target &nbsp;
         <span style="color:var(--muted);">&#9679;</span> No target
+      </div>
+      <div style="margin-top:20px;">
+        <h4 style="font-size:13px; font-weight:600; margin-bottom:12px;">Metrics Trend (Last 12 Weeks)</h4>
+        <canvas id="metricsHistoryChart" style="max-height:300px;"></canvas>
       </div>
     </div>
 
@@ -1206,8 +1213,11 @@ function renderDashboard() {
 
   // Detect "Closed Lost" stage IDs
   var closedLostStageIds = {};
+  var longTermRevisitStageIds = {};
   stages.forEach(function(s) {
-    if (s.name.toLowerCase().indexOf('closed lost') >= 0) { closedLostStageIds[s.id] = true; }
+    var nameLower = s.name.toLowerCase();
+    if (nameLower.indexOf('closed lost') >= 0) { closedLostStageIds[s.id] = true; }
+    if (nameLower.indexOf('long term revisit') >= 0) { longTermRevisitStageIds[s.id] = true; }
   });
 
   const totalOpps = opps.filter(function(o) { var sid = o.pipelineStageId || o.stageId; return !closedLostStageIds[sid]; }).length;
@@ -1217,7 +1227,29 @@ function renderDashboard() {
   const closedLostOpps = opps.filter(function(o) { return closedLostStageIds[o.pipelineStageId || o.stageId]; });
   const pipelineOpps = opps.filter(function(o) { var sid = o.pipelineStageId || o.stageId; return !onboardingStageIds[sid] && !closedLostStageIds[sid]; });
   const pipelineValue = pipelineOpps.reduce(function(s, o) { return s + (o.monetaryValue || 0); }, 0);
-  // Win rate = onboarded / (onboarded + closed lost) — deals that reached a final outcome
+
+  // 28-day rolling conversion breakdown
+  var now = new Date();
+  var thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(now.getDate() - 28);
+  var last28DayOpps = allOpportunities.filter(function(o) {
+    var d = new Date(o.createdAt);
+    return d >= thirtyDaysAgo && d <= now && isAllowedStageId(o.pipelineStageId || o.stageId);
+  });
+  var last28Won = last28DayOpps.filter(function(o) { return onboardingStageIds[o.pipelineStageId || o.stageId]; });
+  var last28Lost = last28DayOpps.filter(function(o) {
+    var sid = o.pipelineStageId || o.stageId;
+    return closedLostStageIds[sid] || longTermRevisitStageIds[sid];
+  });
+  var last28Open = last28DayOpps.filter(function(o) {
+    var sid = o.pipelineStageId || o.stageId;
+    return !onboardingStageIds[sid] && !closedLostStageIds[sid] && !longTermRevisitStageIds[sid];
+  });
+  var pct28Won = last28DayOpps.length > 0 ? Math.round((last28Won.length / last28DayOpps.length) * 100) : 0;
+  var pct28Lost = last28DayOpps.length > 0 ? Math.round((last28Lost.length / last28DayOpps.length) * 100) : 0;
+  var pct28Open = last28DayOpps.length > 0 ? Math.round((last28Open.length / last28DayOpps.length) * 100) : 0;
+
+  // Legacy conversion rate for backwards compatibility
   const decidedCount = onboardedOpps.length + closedLostOpps.length;
   const conversionRate = decidedCount > 0 ? (onboardedOpps.length / decidedCount * 100) : 0;
   const avgDealValue = onboardedOpps.length > 0 ? onboardedValue / onboardedOpps.length : 0;
@@ -1262,13 +1294,53 @@ function renderDashboard() {
   // Combine pipeline + onboarding for total opps tooltip
   var totalOppsDeals = pipelineOpps.concat(onboardedOpps);
 
+  // Count new contacts this week (all opps by createdAt, unfiltered by status)
+  var kpiWeekStart = getReportingWeekMonday();
+  var newContactsThisWeek = allOpportunities.filter(function(o) {
+    return o.createdAt && new Date(o.createdAt) >= kpiWeekStart && isAllowedStageId(o.pipelineStageId || o.stageId);
+  }).length;
+
   const kpis = [
     { label: 'Total Opportunities', value: totalOpps.toLocaleString(), sub: pipelineOpps.length + ' in pipeline / ' + onboardedOpps.length + ' onboarding', tooltip: dealTooltip('All Opportunities', totalOppsDeals) },
-    { label: 'Pipeline Margin', value: '£' + pipelineValue.toLocaleString(), sub: pipelineOpps.length + ' active leads', tooltip: dealTooltip('Pipeline Deals', pipelineOpps) },
+    { label: 'New Contacts This Week', value: newContactsThisWeek.toLocaleString(), sub: 'contacts added this week', tooltip: '' },
     { label: 'Onboarding Margin', value: '£' + onboardedValue.toLocaleString(), sub: onboardedOpps.length + ' moved to onboarding', tooltip: dealTooltip('Onboarding Deals', onboardedOpps) },
-    { label: 'Win Rate', value: conversionRate.toFixed(1) + '%', sub: onboardedOpps.length + ' won vs ' + closedLostOpps.length + ' lost', tooltip: dealTooltip('Won', onboardedOpps, 'Lost', closedLostOpps) },
+    { label: 'Win Rate (28d)', value: pct28Won + '%', sub: 'Won ' + pct28Won + '% | Lost ' + pct28Lost + '% | Open ' + pct28Open + '%', tooltip: dealTooltip('Won (28d)', last28Won, 'Lost (28d)', last28Lost) },
     { label: 'Avg Deal Margin', value: '£' + avgDealValue.toLocaleString(undefined, {maximumFractionDigits:0}), sub: 'from ' + onboardedOpps.length + ' onboarded deals', tooltip: dealTooltip('Onboarded Deals', onboardedOpps) },
   ];
+
+  // Check for lead temperature data
+  var tempHot = 0, tempWarm = 0, tempCold = 0;
+  opps.forEach(function(o) {
+    if (o.customFields) {
+      Object.keys(o.customFields).forEach(function(key) {
+        var val = (o.customFields[key] || '').toString().toLowerCase();
+        if (val.indexOf('hot') >= 0) tempHot++;
+        else if (val.indexOf('warm') >= 0) tempWarm++;
+        else if (val.indexOf('cold') >= 0) tempCold++;
+      });
+    }
+    if (o.tags && Array.isArray(o.tags)) {
+      o.tags.forEach(function(tag) {
+        var t = (tag || '').toLowerCase();
+        if (t.indexOf('hot') >= 0) tempHot++;
+        else if (t.indexOf('warm') >= 0) tempWarm++;
+        else if (t.indexOf('cold') >= 0) tempCold++;
+      });
+    }
+  });
+
+  var tempHtml = '';
+  if (tempHot > 0 || tempWarm > 0 || tempCold > 0) {
+    tempHtml = '<div class="kpi-card">'
+      + '<div class="kpi-label">Lead Temperature</div>'
+      + '<div style="font-size:12px; margin-top:8px;"><span style="color:var(--red);">Hot:</span> ' + tempHot + ' &middot; <span style="color:var(--amber);">Warm:</span> ' + tempWarm + ' &middot; <span style="color:var(--blue);">Cold:</span> ' + tempCold + '</div>'
+      + '</div>';
+  } else {
+    tempHtml = '<div class="kpi-card" style="opacity:0.6;">'
+      + '<div class="kpi-label">Lead Temperature</div>'
+      + '<div class="kpi-sub">No propensity data available</div>'
+      + '</div>';
+  }
 
   document.getElementById('kpiRow').innerHTML = kpis.map(function(k) {
     return '<div class="kpi-card">'
@@ -1282,7 +1354,8 @@ function renderDashboard() {
     + '<div class="kpi-label">Data Completeness</div>'
     + '<div class="kpi-value" style="color:' + completeColor + ';">' + completePct + '%</div>'
     + '<div class="kpi-sub">' + completeCount + ' of ' + checkedCount + ' open leads fully complete</div>'
-    + '</div>';
+    + '</div>'
+    + tempHtml;
 
   // ── Funnel ──
   const stageMap = {};
@@ -1939,9 +2012,10 @@ function renderWeekOnWeek(opps, stages, onbStageIds, lostStageIds) {
   // Use ALL opportunities (not date-filtered) for WoW since we're comparing snapshots
   var allOpps = allOpportunities.filter(function(o) { return o.status !== 'abandoned' && o.status !== 'lost' && o.status !== 'won' && isAllowedStageId(o.pipelineStageId || o.stageId); });
 
-  // Categorise by created date
-  var thisWeek = allOpps.filter(function(o) { return new Date(o.createdAt) >= thisWeekStart; });
-  var lastWeek = allOpps.filter(function(o) { var d = new Date(o.createdAt); return d >= lastWeekStart && d < thisWeekStart; });
+  // For new opp counts: use ALL opportunities (unfiltered by status) just filtered by date
+  var allOppsUnfiltered = allOpportunities.filter(function(o) { return isAllowedStageId(o.pipelineStageId || o.stageId); });
+  var thisWeek = allOppsUnfiltered.filter(function(o) { return new Date(o.createdAt) >= thisWeekStart; });
+  var lastWeek = allOppsUnfiltered.filter(function(o) { var d = new Date(o.createdAt); return d >= lastWeekStart && d < thisWeekStart; });
 
   // Category counts per week (Pipeline vs Onboarding)
   var twPipeline = thisWeek.filter(function(o) { return !onbStageIds[o.pipelineStageId || o.stageId]; }).length;
@@ -2237,6 +2311,107 @@ function cardGlow(value, targetKey) {
     : 'box-shadow: 0 0 12px rgba(239,68,68,0.4); border: 1px solid rgba(239,68,68,0.3);';
 }
 
+function renderKeyInsights(allMetrics, reportingWeek) {
+  var weekKeys = Object.keys(allMetrics).sort();
+  var reportIdx = weekKeys.indexOf(reportingWeek);
+  var prevWeekKey = reportIdx > 0 ? weekKeys[reportIdx - 1] : null;
+  var reportingMetrics = allMetrics[reportingWeek] || {};
+  var prevMetrics = prevWeekKey ? allMetrics[prevWeekKey] : {};
+
+  // Compute 12-week rolling average
+  var rollingWeeks = weekKeys.filter(function(w) { return w < reportingWeek; }).slice(-12);
+  function rollingAvg(metricKey) {
+    if (rollingWeeks.length === 0) return null;
+    var sum = 0;
+    rollingWeeks.forEach(function(w) { sum += (allMetrics[w][metricKey] || 0); });
+    return Math.round((sum / rollingWeeks.length) * 10) / 10;
+  }
+
+  var insights = [];
+
+  // Calculate metric changes
+  var metricChanges = [];
+  ['totalCalls', 'quotesSent', 'demos', 'formsSent', 'formsCompleted'].forEach(function(key) {
+    var current = reportingMetrics[key] || 0;
+    var previous = prevMetrics[key] || 0;
+    if (previous > 0) {
+      var pct = Math.round(((current - previous) / previous) * 100);
+      metricChanges.push({
+        key: key,
+        label: key === 'totalCalls' ? 'Total Calls' : key === 'quotesSent' ? 'Quotes Sent' : key === 'demos' ? 'Demos' : key === 'formsSent' ? 'Forms Sent' : 'Forms Completed',
+        current: current,
+        previous: previous,
+        pct: pct,
+        diff: current - previous,
+        isGood: (key === 'formsSent' || key === 'formsCompleted') ? pct >= 0 : pct >= 0
+      });
+    }
+  });
+
+  // Sort by absolute percentage change
+  metricChanges.sort(function(a, b) { return Math.abs(b.pct) - Math.abs(a.pct); });
+
+  // Insight 1: Biggest positive change
+  var biggest = metricChanges.find(function(m) { return m.pct > 0; });
+  if (biggest) {
+    insights.push({
+      icon: '▲',
+      color: 'var(--green)',
+      text: biggest.label + ' up ' + biggest.pct + '% vs last week'
+    });
+  }
+
+  // Insight 2: Biggest negative change (or biggest positive if only improvements)
+  var negative = metricChanges.find(function(m) { return m.pct < 0; });
+  if (negative) {
+    insights.push({
+      icon: '▼',
+      color: 'var(--red)',
+      text: negative.label + ' down ' + Math.abs(negative.pct) + '% vs last week'
+    });
+  } else if (metricChanges.length > 1 && biggest) {
+    insights.push({
+      icon: '▼',
+      color: 'var(--red)',
+      text: 'All metrics tracking positive this week'
+    });
+  }
+
+  // Insight 3: Compare to 12-week average
+  if (insights.length < 3) {
+    var avgCalls = rollingAvg('totalCalls');
+    var currentCalls = reportingMetrics.totalCalls || 0;
+    if (avgCalls !== null) {
+      var callsAboveAvg = currentCalls > avgCalls;
+      var callsDiff = Math.round(callsAboveAvg ? currentCalls - avgCalls : avgCalls - currentCalls);
+      insights.push({
+        icon: callsAboveAvg ? '▲' : '▼',
+        color: callsAboveAvg ? 'var(--blue)' : 'var(--amber)',
+        text: 'Total Calls ' + (callsAboveAvg ? callsDiff + ' above' : callsDiff + ' below') + ' 12-week average'
+      });
+    }
+  }
+
+  // Limit to 3 insights
+  insights = insights.slice(0, 3);
+
+  var container = document.getElementById('keyInsights');
+  if (insights.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  var html = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">';
+  insights.forEach(function(insight) {
+    html += '<div style="background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; display:flex; align-items:center; gap:12px;">'
+      + '<div style="font-size:24px; color:' + insight.color + '; flex-shrink:0;">' + insight.icon + '</div>'
+      + '<div style="font-size:13px; color:var(--text);">' + insight.text + '</div>'
+      + '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
 function renderWeeklyMetricsRow() {
   // Fetch all historical data to compute WoW and 3-month rolling average
   fetch('/metrics/weekly/all').then(function(r) { return r.json(); }).then(function(data) {
@@ -2251,13 +2426,15 @@ function renderWeeklyMetricsRow() {
     // Get sorted week keys
     var weekKeys = Object.keys(allMetrics).sort();
 
-    // Find previous week key (the one before the reporting week)
+    // Find previous week key (the one before the reporting week) and week-before-last
     var reportIdx = weekKeys.indexOf(reportingWeek);
     var prevWeekKey = reportIdx > 0 ? weekKeys[reportIdx - 1] : null;
+    var twoWeeksAgoKey = reportIdx > 1 ? weekKeys[reportIdx - 2] : null;
     var prevMetrics = prevWeekKey ? allMetrics[prevWeekKey] : {};
+    var twoWeeksAgoMetrics = twoWeeksAgoKey ? allMetrics[twoWeeksAgoKey] : {};
 
-    // Compute 3-month rolling average (last ~13 weeks, excluding reporting week)
-    var rollingWeeks = weekKeys.filter(function(w) { return w < reportingWeek; }).slice(-13);
+    // Compute 12-week rolling average (last 12 weeks, excluding reporting week)
+    var rollingWeeks = weekKeys.filter(function(w) { return w < reportingWeek; }).slice(-12);
     function rollingAvg(metricKey) {
       if (rollingWeeks.length === 0) return null;
       var sum = 0;
@@ -2286,6 +2463,13 @@ function renderWeeklyMetricsRow() {
       if (!prevMetrics) return null;
       if (metricKey === 'talkTimeMins') return ((prevMetrics.talkTimeHrs || 0) * 60) + (prevMetrics.talkTimeMins || 0);
       return prevMetrics[metricKey] || 0;
+    }
+
+    // Helper: get a metric's value from 2 weeks ago
+    function twoWeeksAgoVal(metricKey) {
+      if (!twoWeeksAgoMetrics) return null;
+      if (metricKey === 'talkTimeMins') return ((twoWeeksAgoMetrics.talkTimeHrs || 0) * 60) + (twoWeeksAgoMetrics.talkTimeMins || 0);
+      return twoWeeksAgoMetrics[metricKey] || 0;
     }
 
     // Helper: format talk time in h:mm
@@ -2341,14 +2525,19 @@ function renderWeeklyMetricsRow() {
           + arrow + ' ' + sign + diffDisplay + ' (' + (pct > 0 ? '+' : '') + pct + '%)'
           + '</div>'
           + '<div style="font-size:10px; color:var(--muted);">Last wk: ' + prevDisplay + '</div>';
+        var twoWeeksAgo = twoWeeksAgoVal(c.key);
+        if (twoWeeksAgo !== null && twoWeeksAgo !== undefined) {
+          var twoWeeksAgoDisplay = c.isTalkTime ? fmtTalkTime(twoWeeksAgo) : twoWeeksAgo;
+          wowHtml += '<div style="font-size:10px; color:var(--muted);">2 wks ago: ' + twoWeeksAgoDisplay + '</div>';
+        }
       }
 
-      // 3-month rolling average
+      // 12-week rolling average
       var avg = c.isTalkTime ? rollingAvgTalkTime() : rollingAvg(c.key);
       var avgHtml = '';
       if (avg !== null) {
         var avgDisplay = c.isTalkTime ? fmtTalkTime(avg) : avg;
-        avgHtml = '<div style="font-size:10px; color:var(--muted); margin-top:4px; border-top:1px solid var(--border); padding-top:4px;">3m avg: <strong>' + avgDisplay + '</strong></div>';
+        avgHtml = '<div style="font-size:10px; color:var(--muted); margin-top:4px; border-top:1px solid var(--border); padding-top:4px;">12wk avg: <strong>' + avgDisplay + '</strong></div>';
       }
 
       // Target line
@@ -2367,6 +2556,9 @@ function renderWeeklyMetricsRow() {
         + avgHtml
         + '</div>';
     }).join('');
+
+    // Render key insights
+    renderKeyInsights(allMetrics, reportingWeek);
   }).catch(function(err) { console.error('Failed to render metrics row:', err); });
 }
 
@@ -2437,6 +2629,45 @@ function renderMetricsHistory(allMetrics) {
       + '<td style="text-align:center; color:var(--muted);">' + (m.totalOnboarding || 0) + '</td>'
       + '</tr>';
   }).join('');
+
+  // Render the trend chart
+  var sortedWeeks = Object.keys(allMetrics).sort();
+  var chartCanvas = document.getElementById('metricsHistoryChart');
+  if (chartCanvas && sortedWeeks.length > 0) {
+    var last12Weeks = sortedWeeks.slice(-12);
+    var labels = last12Weeks.map(function(wk) { return weekKeyToWC(wk); });
+    var totalCallsData = last12Weeks.map(function(wk) { return allMetrics[wk].totalCalls || 0; });
+    var quotesSentData = last12Weeks.map(function(wk) { return allMetrics[wk].quotesSent || 0; });
+    var demosData = last12Weeks.map(function(wk) { return allMetrics[wk].demos || 0; });
+    var newOppsData = last12Weeks.map(function(wk) { return allMetrics[wk].newOpps || 0; });
+
+    if (charts.metricsHistory) {
+      charts.metricsHistory.destroy();
+    }
+    charts.metricsHistory = new Chart(chartCanvas, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'Total Calls', data: totalCallsData, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', tension: 0.3, fill: false, pointRadius: 3 },
+          { label: 'Quotes Sent', data: quotesSentData, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', tension: 0.3, fill: false, pointRadius: 3 },
+          { label: 'Demos', data: demosData, borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)', tension: 0.3, fill: false, pointRadius: 3 },
+          { label: 'New Opps', data: newOppsData, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', tension: 0.3, fill: false, pointRadius: 3 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { position: 'top', labels: { color: '#e4e4e7', padding: 12, font: { size: 11 } } }
+        },
+        scales: {
+          x: { ticks: { color: '#71717a', font: { size: 11 } }, grid: { color: '#2a2d3a' } },
+          y: { ticks: { color: '#71717a', font: { size: 11 } }, grid: { color: '#2a2d3a' } }
+        }
+      }
+    });
+  }
 }
 
 // ── Show admin button if admin, then auto-login check ──
